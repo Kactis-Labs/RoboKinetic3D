@@ -9,6 +9,7 @@ export default function MathReportPanel({
   l1,
   l2,
   telemetry,
+  mobileTab = 'split',
 }) {
   const isDark = theme === 'dark';
   const { direct, inverse, servos } = telemetry;
@@ -34,7 +35,9 @@ export default function MathReportPanel({
 
   return (
     <aside
-      className={`w-full md:w-[390px] lg:w-[440px] h-full flex flex-col border-0 md:border-l shrink-0 transition-colors select-text ${
+      className={`w-full md:w-[390px] lg:w-[440px] ${
+        mobileTab === 'math' ? 'flex-1 h-full flex flex-col' : 'hidden md:flex md:flex-col'
+      } md:h-full border-0 md:border-l shrink-0 transition-colors select-text ${
         isDark
           ? 'bg-[#182234] border-[#334155] text-[#F8FAFC]'
           : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A]'

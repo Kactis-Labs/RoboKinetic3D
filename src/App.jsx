@@ -93,73 +93,50 @@ export default function App() {
       */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Panel Izquierdo: PropertyManager (Sliders y Actuadores) */}
-        <div
-          className={`h-full ${
-            mobileTab === 'split'
-              ? 'flex-1 overflow-hidden flex flex-col'
-              : 'hidden md:flex md:w-80 lg:w-[350px]'
-          } md:w-80 lg:w-[350px] md:h-full shrink-0`}
-        >
-          <PropertyManager
-            theme={theme}
-            theta1Deg={theta1Deg}
-            setTheta1Deg={setTheta1Deg}
-            theta2Deg={theta2Deg}
-            setTheta2Deg={setTheta2Deg}
-            theta3Deg={theta3Deg}
-            setTheta3Deg={setTheta3Deg}
-            l1={l1}
-            setL1={setL1}
-            l2={l2}
-            setL2={setL2}
-            telemetry={telemetry}
-            onPosePreset={handlePosePreset}
-          />
-        </div>
+        <PropertyManager
+          theme={theme}
+          theta1Deg={theta1Deg}
+          setTheta1Deg={setTheta1Deg}
+          theta2Deg={theta2Deg}
+          setTheta2Deg={setTheta2Deg}
+          theta3Deg={theta3Deg}
+          setTheta3Deg={setTheta3Deg}
+          l1={l1}
+          setL1={setL1}
+          l2={l2}
+          setL2={setL2}
+          telemetry={telemetry}
+          onPosePreset={handlePosePreset}
+          mobileTab={mobileTab}
+        />
 
         {/* Visor Central Tridimensional Three.js */}
-        <div
-          className={`${
-            mobileTab === 'split'
-              ? 'h-[40vh] sm:h-[45vh] w-full shrink-0 border-b border-[#334155]/60 order-first md:order-none'
-              : mobileTab === '3d'
-              ? 'flex-1 h-full w-full'
-              : 'hidden md:block'
-          } md:flex-1 md:h-full md:border-b-0 relative overflow-hidden`}
-        >
-          <Viewport3D
-            theme={theme}
-            theta1Deg={theta1Deg}
-            setTheta2Deg={setTheta2Deg}
-            theta2Deg={theta2Deg}
-            theta3Deg={theta3Deg}
-            l1={l1}
-            l2={l2}
-            hBase={hBase}
-            telemetry={telemetry}
-            cameraViewTrigger={cameraViewTrigger}
-            onSetCameraView={handleSetCameraView}
-          />
-        </div>
+        <Viewport3D
+          theme={theme}
+          theta1Deg={theta1Deg}
+          setTheta2Deg={setTheta2Deg}
+          theta2Deg={theta2Deg}
+          theta3Deg={theta3Deg}
+          l1={l1}
+          l2={l2}
+          hBase={hBase}
+          telemetry={telemetry}
+          cameraViewTrigger={cameraViewTrigger}
+          onSetCameraView={handleSetCameraView}
+          mobileTab={mobileTab}
+        />
 
         {/* Panel Derecho: Cálculos Matemáticos */}
-        <div
-          className={`${
-            mobileTab === 'math'
-              ? 'flex-1 h-full w-full overflow-hidden flex flex-col'
-              : 'hidden md:flex md:w-[390px] lg:w-[440px]'
-          } md:w-[390px] lg:w-[440px] md:h-full shrink-0`}
-        >
-          <MathReportPanel
-            theme={theme}
-            theta1Deg={theta1Deg}
-            theta2Deg={theta2Deg}
-            theta3Deg={theta3Deg}
-            l1={l1}
-            l2={l2}
-            telemetry={telemetry}
-          />
-        </div>
+        <MathReportPanel
+          theme={theme}
+          theta1Deg={theta1Deg}
+          theta2Deg={theta2Deg}
+          theta3Deg={theta3Deg}
+          l1={l1}
+          l2={l2}
+          telemetry={telemetry}
+          mobileTab={mobileTab}
+        />
       </main>
 
       {/* Barra de Navegación Móvil Inferior estilo CAD (Solo visible en pantallas < md) */}

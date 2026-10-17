@@ -15,6 +15,7 @@ export default function Viewport3D({
   telemetry,
   cameraViewTrigger,
   onSetCameraView,
+  mobileTab = 'split',
 }) {
   const isDark = theme === 'dark';
   const [showDetails, setShowDetails] = useState(false);
@@ -67,12 +68,7 @@ export default function Viewport3D({
 
     // Cámara de perspectiva CAD
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    // Posición adaptativa para pantallas móviles verticales
-    if (width < height) {
-      camera.position.set(8.5, 7.2, 10.2);
-    } else {
-      camera.position.set(6.8, 5.8, 8.2);
-    }
+    camera.position.set(6.8, 5.8, 8.2);
     cameraRef.current = camera;
 
     // Renderizador WebGL de alta precisión
@@ -788,7 +784,13 @@ export default function Viewport3D({
 
   return (
     <div
-      className={`relative flex-1 h-full w-full overflow-hidden transition-colors ${
+      className={`relative ${
+        mobileTab === 'split'
+          ? 'h-[40vh] sm:h-[45vh] w-full shrink-0 border-b border-[#334155]/60 order-first md:order-none'
+          : mobileTab === '3d'
+          ? 'flex-1 h-full w-full'
+          : 'hidden md:block'
+      } md:flex-1 md:h-full md:w-full md:border-b-0 overflow-hidden transition-colors ${
         isDark ? 'bg-[#0f172a]' : 'bg-[#dce5ed]'
       }`}
     >
@@ -799,10 +801,10 @@ export default function Viewport3D({
       />
 
       {/* Indicador Flotante Superior Izquierdo: Coordenadas CAD en Vivo */}
-      <div className="absolute top-2.5 left-2.5 z-10 select-none max-w-[calc(100vw-20px)] sm:max-w-xs">
-        {/* Vista Ultra-Compacta para Celular */}
+      {/* 1. Versión Móvil: Compacta con botón de info */}
+      <div className="md:hidden absolute top-2.5 left-2.5 z-10 select-none max-w-[calc(100vw-20px)]">
         <div
-          className={`sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded border shadow-sm backdrop-blur-md text-[10px] font-math ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded border shadow-sm backdrop-blur-md text-[10px] font-math ${
             isDark
               ? 'bg-[#182234]/95 border-[#334155] text-[#f8fafc]'
               : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
@@ -832,11 +834,26 @@ export default function Viewport3D({
           </button>
         </div>
 
-        {/* Tarjeta Completa (En móvil visible solo si showDetails está activo; en desktop siempre visible) */}
+        {showDetails && (
+          <div
+            className={`mt-1 px-3 py-2 rounded border shadow-sm backdrop-blur-md space-y-1.5 ${
+              isDark
+                ? 'bg-[#182234]/95 border-[#334155] text-[#f8fafc]'
+                : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
+            }`}
+          >
+            <div className="flex items-center justify-between text-[10px] font-math">
+              <span>Radio Suelo r_xy: <strong className="text-[#3b82f6]">{telemetry.direct.resultRGround} m</strong></span>
+              <span>Dist 3D ρ: <strong className="text-[#d97706]">{telemetry.direct.resultRho} m</strong></span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Versión Escritorio: TARJETA ORIGINAL EXACTA */}
+      <div className="hidden md:flex absolute top-3 left-3 z-10 pointer-events-none flex-col gap-1.5 select-none">
         <div
-          className={`${
-            showDetails ? 'block mt-1' : 'hidden'
-          } sm:block px-3 py-2 rounded border shadow-sm backdrop-blur-md space-y-1.5 ${
+          className={`px-3.5 py-2.5 rounded border shadow-sm backdrop-blur-md space-y-1.5 ${
             isDark
               ? 'bg-[#182234]/90 border-[#334155] text-[#f8fafc]'
               : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
@@ -888,8 +905,8 @@ export default function Viewport3D({
         </div>
       </div>
 
-      {/* Badges de Articulaciones Activas (Visible en pantallas medianas) */}
-      <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none hidden sm:flex flex-col gap-1 select-none">
+      {/* Badges de Articulaciones Activas (Visible en pantallas extra grandes para evitar colisión) */}
+      <div className="absolute top-3 right-3 z-10 pointer-events-none hidden xl:flex flex-col gap-1 select-none">
         <div
           className={`px-2.5 py-1.5 rounded border shadow-sm backdrop-blur-md text-[10px] space-y-1 ${
             isDark ? 'bg-[#182234]/85 border-[#334155] text-[#cbd5e1]' : 'bg-[#ffffff]/90 border-[#cbd5e1] text-[#334155]'
@@ -909,21 +926,14 @@ export default function Viewport3D({
         </div>
       </div>
 
-      {/* Vistas Rápidas de Cámara Flotantes en el Viewport (Accesibles en Móvil y Desktop) */}
+      {/* Vistas Rápidas de Cámara Flotantes en el Viewport (EXCLUSIVO MÓVIL < md) */}
       <div
-        className={`absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1 p-1 rounded-lg border shadow-sm backdrop-blur-md select-none ${
+        className={`md:hidden absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1 p-1 rounded-lg border shadow-sm backdrop-blur-md select-none ${
           isDark
             ? 'bg-[#182234]/90 border-[#334155]'
             : 'bg-[#ffffff]/95 border-[#cbd5e1]'
         }`}
       >
-        <span
-          className={`hidden sm:inline text-[10px] font-semibold px-1 ${
-            isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'
-          }`}
-        >
-          Vista:
-        </span>
         {[
           { id: 'isometric', label: 'Iso' },
           { id: 'top', label: 'Planta' },
@@ -946,29 +956,29 @@ export default function Viewport3D({
         ))}
       </div>
 
-      {/* Leyenda Técnica CAD en el borde inferior */}
+      {/* Leyenda Técnica CAD en el borde inferior (ORIGINAL EXACTA) */}
       <div
-        className={`absolute bottom-2.5 left-2.5 z-10 pointer-events-none hidden md:flex items-center gap-4 px-3.5 py-1 rounded border shadow-sm backdrop-blur-md text-[10px] font-math ${
+        className={`absolute bottom-3 left-3 z-10 pointer-events-none hidden md:flex items-center gap-4 px-3.5 py-1.5 rounded border shadow-sm backdrop-blur-md text-[11px] font-math ${
           isDark
             ? 'bg-[#182234]/90 border-[#334155] text-[#cbd5e1]'
             : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#1e293b]'
         }`}
       >
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${isDark ? 'bg-[#34d399]' : 'bg-[#047857]'}`} />
+          <span className={`w-2.5 h-2.5 rounded-full ${isDark ? 'bg-[#34d399]' : 'bg-[#047857]'}`} />
           <span className="font-sans font-medium">Eje X (Mesa)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${isDark ? 'bg-[#818cf8]' : 'bg-[#4338ca]'}`} />
+          <span className={`w-2.5 h-2.5 rounded-full ${isDark ? 'bg-[#818cf8]' : 'bg-[#4338ca]'}`} />
           <span className="font-sans font-medium">Eje Y (Profundidad)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${isDark ? 'bg-[#fbbf24]' : 'bg-[#b45309]'}`} />
+          <span className={`w-2.5 h-2.5 rounded-full ${isDark ? 'bg-[#fbbf24]' : 'bg-[#b45309]'}`} />
           <span className="font-sans font-medium">Cota Z (Altura)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
-          <span className="font-sans font-medium">TCP</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#2563eb]" />
+          <span className="font-sans font-medium">TCP (Efector Final)</span>
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ export default function PropertyManager({
   setL2,
   telemetry,
   onPosePreset,
+  mobileTab = 'split',
 }) {
   const isDark = theme === 'dark';
   const { direct } = telemetry;
@@ -67,7 +68,9 @@ export default function PropertyManager({
 
   return (
     <aside
-      className={`w-full md:w-80 lg:w-[350px] h-full flex flex-col border-r shrink-0 transition-colors select-none ${
+      className={`w-full md:w-80 lg:w-[350px] ${
+        mobileTab === 'split' ? 'flex-1 flex flex-col' : 'hidden md:flex md:flex-col'
+      } md:h-full border-r shrink-0 transition-colors select-none ${
         isDark
           ? 'bg-[#182234] border-[#334155] text-[#F8FAFC]'
           : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A]'
@@ -108,11 +111,11 @@ export default function PropertyManager({
       {/* Contenedor scrolleable de propiedades */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs font-sans touch-pan-y">
         {/* ======================================================== */}
-        {/* PRESETS DE POSTURA RÁPIDOS                                */}
+        {/* PRESETS DE POSTURA RÁPIDOS (SOLO EN MÓVIL < md)           */}
         {/* ======================================================== */}
         {onPosePreset && (
           <div
-            className={`p-2 rounded border flex flex-col gap-1.5 ${
+            className={`md:hidden p-2 rounded border flex flex-col gap-1.5 ${
               isDark ? 'bg-[#1e293b]/60 border-[#334155]' : 'bg-[#ffffff] border-[#cbd5e1] shadow-sm'
             }`}
           >
@@ -202,8 +205,19 @@ export default function PropertyManager({
                 </div>
               </div>
 
-              {/* Slider táctil con botones paso a paso */}
-              <div className="flex items-center gap-1.5">
+              {/* Slider continuo original para escritorio */}
+              <input
+                type="range"
+                min="-180"
+                max="180"
+                step="0.5"
+                value={theta1Deg}
+                onChange={(e) => setTheta1Deg(parseFloat(e.target.value))}
+                className="hidden md:block"
+              />
+
+              {/* Slider táctil con botones paso a paso exclusivo para móvil */}
+              <div className="flex md:hidden items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setTheta1Deg((prev) => Math.max(-180, parseFloat((Number(prev) - 5).toFixed(1))))}
@@ -284,8 +298,19 @@ export default function PropertyManager({
                 </div>
               </div>
 
-              {/* Slider táctil con botones paso a paso */}
-              <div className="flex items-center gap-1.5">
+              {/* Slider continuo original para escritorio */}
+              <input
+                type="range"
+                min="-20"
+                max="100"
+                step="0.5"
+                value={theta2Deg}
+                onChange={(e) => setTheta2Deg(parseFloat(e.target.value))}
+                className="hidden md:block"
+              />
+
+              {/* Slider táctil con botones paso a paso exclusivo para móvil */}
+              <div className="flex md:hidden items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setTheta2Deg((prev) => Math.max(-20, parseFloat((Number(prev) - 5).toFixed(1))))}
@@ -366,8 +391,19 @@ export default function PropertyManager({
                 </div>
               </div>
 
-              {/* Slider táctil con botones paso a paso */}
-              <div className="flex items-center gap-1.5">
+              {/* Slider continuo original para escritorio */}
+              <input
+                type="range"
+                min="-120"
+                max="60"
+                step="0.5"
+                value={theta3Deg}
+                onChange={(e) => setTheta3Deg(parseFloat(e.target.value))}
+                className="hidden md:block"
+              />
+
+              {/* Slider táctil con botones paso a paso exclusivo para móvil */}
+              <div className="flex md:hidden items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setTheta3Deg((prev) => Math.max(-120, parseFloat((Number(prev) - 5).toFixed(1))))}
@@ -465,7 +501,20 @@ export default function PropertyManager({
                   <span className={`font-math ${colors.label}`}>m</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+
+              {/* Slider continuo original para escritorio */}
+              <input
+                type="range"
+                min="1.0"
+                max="2.5"
+                step="0.05"
+                value={l1}
+                onChange={(e) => setL1(parseFloat(e.target.value))}
+                className="hidden md:block"
+              />
+
+              {/* Slider táctil para móvil */}
+              <div className="flex md:hidden items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setL1((prev) => Math.max(1.0, parseFloat((Number(prev) - 0.1).toFixed(2))))}
@@ -518,7 +567,20 @@ export default function PropertyManager({
                   <span className={`font-math ${colors.label}`}>m</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+
+              {/* Slider continuo original para escritorio */}
+              <input
+                type="range"
+                min="0.8"
+                max="2.0"
+                step="0.05"
+                value={l2}
+                onChange={(e) => setL2(parseFloat(e.target.value))}
+                className="hidden md:block"
+              />
+
+              {/* Slider táctil para móvil */}
+              <div className="flex md:hidden items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setL2((prev) => Math.max(0.8, parseFloat((Number(prev) - 0.1).toFixed(2))))}
