@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>RoboKinetic 3D - Informe Técnico Fase 1</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    @page {
+      size: A4 portrait;
+      margin: 12mm 15mm 12mm 15mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #0f172a;
+      line-height: 1.42;
+      font-size: 9pt;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+
+    /* Portada / Header */
+    .header-bar {
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .header-title h1 {
+      font-size: 17pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0;
+      letter-spacing: -0.4px;
+    }
+
+    .header-title p {
+      font-size: 9.5pt;
+      color: #475569;
+      margin: 2px 0 0 0;
+      font-weight: 500;
+    }
+
+    .header-meta {
+      text-align: right;
+      font-size: 8pt;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Secciones */
+    h2 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #1e293b;
+      border-left: 3.5px solid #2563eb;
+      padding-left: 7px;
+      margin-top: 13px;
+      margin-bottom: 6px;
+      letter-spacing: -0.2px;
+    }
+
+    h3 {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #2563eb;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    p {
+      margin: 0 0 7px 0;
+      text-align: justify;
+      color: #334155;
+    }
+
+    /* Grid de Fórmulas en 2 columnas para optimizar espacio */
+    .formula-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 7px 0;
+    }
+
+    .formula-card {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      padding: 7px 10px;
+    }
+
+    .formula-title {
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #2563eb;
+      margin-bottom: 2px;
+    }
+
+    .formula-math {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #0f172a;
+      margin: 2px 0;
+    }
+
+    .formula-desc {
+      font-size: 8pt;
+      color: #475569;
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    /* Tablas técnicas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 10px 0;
+      font-size: 8pt;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: #0f172a;
+      font-weight: 600;
+      text-align: left;
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+    }
+
+    td {
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      vertical-align: top;
+      line-height: 1.35;
+    }
+
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    .code-cell {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #2563eb;
+      white-space: nowrap;
+    }
+
+    /* Lista con bullets técnicos */
+    ul {
+      margin: 4px 0 8px 16px;
+      padding: 0;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 4px;
+      text-align: justify;
+      line-height: 1.38;
+    }
+
+    /* Nota técnica destacada */
+    .note-box {
+      background: #eff6ff;
+      border-left: 3px solid #2563eb;
+      padding: 8px 12px;
+      border-radius: 0 5px 5px 0;
+      margin: 9px 0 0 0;
+      font-size: 8.5pt;
+      color: #1e3a8a;
+      line-height: 1.4;
+    }
+
+    .note-box strong {
+      color: #1d4ed8;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* Salto de página estricto */
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .footer-doc {
+      margin-top: 14px;
+      padding-top: 6px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ======================================================== -->
+  <!-- PÁGINA 1: PROPÓSITO Y FUNDAMENTOS MATEMÁTICOS            -->
+  <!-- ======================================================== -->
+  <div class="header-bar">
+    <div class="header-title">
+      <h1>RoboKinetic 3D</h1>
+      <p>Informe Técnico de Funcionamiento y Desarrollo · Fase 1</p>
+    </div>
+    <div class="header-meta">
+      <div>DOC: RPT-RK3D-01</div>
+      <div>SISTEMA: Cinemática J1</div>
+      <div>ESTADO: Aprobado (v1.0)</div>
+    </div>
+  </div>
+
+  <h2>1. Resumen Ejecutivo y Propósito del Sistema</h2>
+  <p>
+    El proyecto <strong>RoboKinetic 3D</strong> es un simulador cinemático tridimensional interactivo ejecutado directamente en el navegador web. Su objetivo principal es salvar la brecha técnica entre la física de los actuadores robóticos (que giran en ángulos mediante servomotores en <em>Coordenadas Polares</em>) y el espacio de trabajo euclídeo del mundo real (donde los objetos se manipulan mediante cotas métricas lineales en <em>Coordenadas Cartesianas</em>).
+  </p>
+  <p>
+    Esta <strong>Fase 1</strong> implementa el modelo analítico completo y la visualización 3D para el primer eslabón del robot (articulación de base giratoria <strong>J1</strong> con radio de extensión <strong>r</strong>). Permite manipular y monitorear en tiempo real la correspondencia exacta entre la posición angular del motor y la posición física sobre el plano de trabajo.
+  </p>
+
+  <h2>2. Fundamentos Matemáticos y Funcionamiento Analítico</h2>
+  <p>
+    El sistema implementa un motor cinemático continuo y bidireccional gobernado por las siguientes relaciones trigonométricas y vectoriales:
+  </p>
+
+  <h3>2.1. Cinemática Directa: Espacio Articular (r, θ) → Espacio Cartesiano (X, Y)</h3>
+  <p>
+    Traduce las variables del manipulador (ángulo de giro θ y radio r) a la posición resultante en la mesa:
+  </p>
+
+  <div class="formula-grid">
+    <div class="formula-card">
+      <div class="formula-title">Componente Horizontal (Eje X)</div>
+      <div class="formula-math">X = r · cos(θ)</div>
+      <p class="formula-desc">Multiplica la extensión del brazo por el coseno del ángulo. Determina el desplazamiento lateral.</p>
+    </div>
+    <div class="formula-card">
+      <div class="formula-title">Componente Profundidad (Eje Y)</div>
+      <div class="formula-math">Y = r · sin(θ)</div>
+      <p class="formula-desc">Multiplica la extensión del brazo por el seno del ángulo. Determina el avance en profundidad.</p>
+    </div>
+  </div>
+
+  <h3>2.2. Cinemática Inversa: Espacio Cartesiano (X, Y) → Espacio Articular (r, θ)</h3>
+  <p>
+    Calcula los parámetros que deben alcanzar los actuadores para ubicar el efector en cualquier coordenada objetivo de la mesa:
+  </p>
+
+  <div class="formula-grid">
+    <div class="formula-card">
+      <div class="formula-title">Extensión Requerida (Pitágoras)</div>
+      <div class="formula-math">r = √(X² + Y²)</div>
+      <p class="formula-desc">Calcula la hipotenusa del triángulo rectángulo proyectado sobre el plano.</p>
+    </div>
+    <div class="formula-card">
+      <div class="formula-title">Orientación Angular (atan2)</div>
+      <div class="formula-math">θ = atan2(Y, X)</div>
+      <p class="formula-desc">Arco tangente de 4 cuadrantes en [-π, +π] radianes (-180° a +180°) sin error por división entre cero.</p>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <strong>Demostración de Exactitud Geométrica (Caso de Prueba: θ = 45.0°, r = 5.0 m)</strong>
+    Al configurar un ángulo de 45° con radio r = 5.0 m, los valores calculados son X = 5.0 · cos(45°) ≈ 3.536 m e Y = 5.0 · sin(45°) ≈ 3.536 m. En una retícula con subdivisiones de 0.50 m, el efector sobrepasa la esquina de (3.50, 3.50 m) por exactamente 3.6 cm debido al factor irracional √2 / 2, coincidiendo de forma idéntica con el 5° anillo concéntrico del radar polar (√(3.536² + 3.536²) = 5.000 m). Esto certifica que el motor matemático calcula física continua exacta sin truncamiento de enteros.
+  </div>
+
+  <div class="footer-doc">
+    <span>RoboKinetic 3D · Informe Técnico Fase 1</span>
+    <span>Página 1 de 2</span>
+  </div>
+
+  <!-- SALTO DE PÁGINA LIMPIO -->
+  <div class="page-break"></div>
+
+  <!-- ======================================================== -->
+  <!-- PÁGINA 2: ARQUITECTURA DE SOFTWARE Y DESARROLLO 3D       -->
+  <!-- ======================================================== -->
+  <div class="header-bar" style="margin-bottom: 12px;">
+    <div class="header-title">
+      <h1 style="font-size: 14pt;">RoboKinetic 3D</h1>
+      <p style="font-size: 8.5pt;">Arquitectura de Software y Desarrollo Técnico · Fase 1</p>
+    </div>
+    <div class="header-meta">
+      <div>DOC: RPT-RK3D-01</div>
+      <div>PÁGINA: 2 de 2</div>
+    </div>
+  </div>
+
+  <h2>3. Arquitectura del Software y Componentes Desarrollados</h2>
+  <p>
+    El sistema se estructuró siguiendo un patrón de desacoplamiento modular entre la lógica matemática pura, la representación visual WebGL en 3D y la capa de controles reactivos:
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 27%;">Módulo / Archivo</th>
+        <th style="width: 18%;">Tecnología</th>
+        <th style="width: 55%;">Responsabilidad y Funcionamiento</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="code-cell">src/kinematics.js</td>
+        <td>JavaScript ES6</td>
+        <td>
+          Cerebro matemático analítico independiente. Contiene <code>polarToCartesian()</code>, <code>cartesianToPolar()</code>, conversiones deg/rad y <code>getKinematicsTelemetry()</code> con desglose algebraico en tiempo real.
+        </td>
+      </tr>
+      <tr>
+        <td class="code-cell">src/components/PropertyManager.jsx</td>
+        <td>React / Tailwind</td>
+        <td>
+          Panel lateral izquierdo de control articular. Ofrece entrada dual mediante deslizadores continuos y casillas de entrada numérica directa para θ y r, desplegando las cotas métricas resultantes.
+        </td>
+      </tr>
+      <tr>
+        <td class="code-cell">src/components/Viewport3D.jsx</td>
+        <td>Three.js / WebGL</td>
+        <td>
+          Lienzo tridimensional interactivo. Gestiona la escena 3D, materiales PBR de aluminio maquinado/acero, radar polar concéntrico, cotas ortogonales punteadas dinámicas, línea vertical de caída (drop line) y cámaras.
+        </td>
+      </tr>
+      <tr>
+        <td class="code-cell">src/components/MathReportPanel.jsx</td>
+        <td>React / Tailwind</td>
+        <td>
+          Panel lateral derecho ("Cálculos Matemáticos"). Opera como una terminal analítica en vivo que sustituye variables paso a paso y valida la cinemática inversa instantáneamente.
+        </td>
+      </tr>
+      <tr>
+        <td class="code-cell">src/components/Header.jsx</td>
+        <td>React / Lucide</td>
+        <td>
+          Barra superior de utilidades. Integra preajustes rápidos de ángulo (0°, 45°, 90°, 180°), restablecimiento a posición Home, selector de vistas ortogonales y alternador de tema.
+        </td>
+      </tr>
+      <tr>
+        <td class="code-cell">src/App.jsx</td>
+        <td>React State Engine</td>
+        <td>
+          Orquestador central. Sincroniza el estado reactivo entre los cálculos matemáticos, el viewport 3D y los paneles laterales a 60 FPS sin retraso.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Motor Gráfico 3D y Representación Espacial</h2>
+  <p>
+    En Three.js, el espacio cartesiano define el eje horizontal X a la derecha, el eje vertical Y hacia el cielo y el eje Z hacia el frente. Para reflejar fielmente la mesa de trabajo robótica:
+  </p>
+  <ul>
+    <li>
+      <strong>Mapeo de Coordenadas:</strong> El eje horizontal cartesiano se proyecta sobre <em>+X</em> y el eje de profundidad cartesiano sobre <em>-Z</em>. Esto garantiza que la rotación física positiva del grupo articular (<code>rotation.y = rad</code>) coincida con la convención matemática antihoraria estándar.
+    </li>
+    <li>
+      <strong>Cotas Ortogonales Dinámicas y Triángulo Proyectado:</strong> Dos líneas punteadas de precisión (<code>lineX</code> y <code>lineY</code>) se recalculan en cada frame desde la punta del efector hacia los ejes, generando un triángulo translúcido sobre el suelo que ilustra la descomposición trigonométrica.
+    </li>
+    <li>
+      <strong>Línea de Caída Vertical (Drop Line) y Diana de Suelo:</strong> Un segmento punteado vertical conecta el efector final con una diana circular en el piso (Y=0), permitiendo evaluar la proyección ortogonal independientemente del ángulo de cámara.
+    </li>
+    <li>
+      <strong>Vistas Ortogonales CAD:</strong> Se implementaron accesos directos de cámara: <em>Isométrica</em> (inspección volumétrica), <em>Planta X-Y</em> (vista cenital plana 2D) y <em>Frontal</em> (vista a ras de suelo).
+    </li>
+  </ul>
+
+  <h2>5. Estado de Cumplimiento y Próximos Pasos</h2>
+  <p>
+    La <strong>Fase 1</strong> ha sido completada con éxito, proporcionando una base analítica rigurosa, un entorno 3D funcional y una sincronización reactiva instantánea.
+  </p>
+  <ul>
+    <li><strong>Fase 2 (Próxima):</strong> Incorporación de los eslabones de elevación del hombro (J2) y flexión del codo (J3) para completar la cinemática espacial 3D completa <strong>(X, Y, Z)</strong> mediante matrices de Denavit-Hartenberg.</li>
+    <li><strong>Fase 3:</strong> Implementación del efector terminal tipo pinza (gripper) y rutina automatizada de <em>Pick & Place</em> mediante máquina de estados finitos e interpolación de trayectoria.</li>
+  </ul>
+
+  <div class="footer-doc">
+    <span>RoboKinetic 3D · Informe Técnico Fase 1</span>
+    <span>Página 2 de 2</span>
+  </div>
+
+</body>
+</html>

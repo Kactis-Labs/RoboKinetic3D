@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Tipografía mono para telemetría, cotas y matemáticas */
+.font-math {
+  font-family: var(--font-mono);
+}
+
+/* ========================================================
+   CONTROLES DESLIZANTES ESTILO CAD TÉCNICO (Sin resplandor neón)
+   ======================================================== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+
+input[type="range"]:focus {
+  outline: none;
+}
+
+/* Pista en tema claro */
+.theme-light input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #cbd5e1;
+  transition: background 0.15s ease;
+}
+.theme-light input[type="range"]:hover::-webkit-slider-runnable-track {
+  background: #94a3b8;
+}
+
+/* Pista en tema oscuro */
+.theme-dark input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #334155;
+  transition: background 0.15s ease;
+}
+.theme-dark input[type="range"]:hover::-webkit-slider-runnable-track {
+  background: #475569;
+}
+
+/* Pulgar / Manija estilo SolidWorks */
+.theme-light input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  margin-top: -6px;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+.theme-light input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  background: #1d4ed8;
+}
+.theme-light input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+  background: #1e40af;
+}
+
+.theme-dark input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #182234;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  margin-top: -6px;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+.theme-dark input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  background: #60a5fa;
+}
+.theme-dark input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+  background: #2563eb;
+}
+
+/* Optimización táctil para pantallas móviles (Android / iOS) */
+@media (max-width: 768px) {
+  .theme-light input[type="range"]::-webkit-slider-runnable-track,
+  .theme-dark input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .theme-light input[type="range"]::-webkit-slider-thumb {
+    height: 22px;
+    width: 22px;
+    margin-top: -8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+
+  .theme-dark input[type="range"]::-webkit-slider-thumb {
+    height: 22px;
+    width: 22px;
+    margin-top: -8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Scrollbars CAD sobrias */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.theme-dark ::-webkit-scrollbar-track {
+  background: #111827;
+}
+.theme-dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+.theme-dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
