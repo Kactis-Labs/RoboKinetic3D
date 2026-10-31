@@ -52,7 +52,7 @@ export default function MathReportPanel({
         }`}
       >
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-[#2563eb] text-white flex items-center justify-center shadow-sm">
+          <div className="w-5 h-5 rounded bg-[#ea580c] text-white flex items-center justify-center shadow-sm">
             <Calculator className="w-3 h-3" />
           </div>
           <div>
@@ -60,24 +60,10 @@ export default function MathReportPanel({
               Cálculos Matemáticos
             </h2>
             <span className={`text-[10px] block leading-tight ${colors.label}`}>
-              Cinemática Analítica en Tiempo Real (3 DOF)
+              Cinemática Analítica Directa e Inversa
             </span>
           </div>
         </div>
-        <span
-          className={`inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded border font-medium ${
-            isDark
-              ? 'border-[#34d399]/40 text-[#34d399] bg-[#047857]/15'
-              : 'border-[#047857]/40 text-[#047857] bg-[#047857]/10'
-          }`}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isDark ? 'bg-[#34d399]' : 'bg-[#047857]'
-            } animate-pulse`}
-          />
-          EN VIVO
-        </span>
       </div>
 
       {/* Contenedor scrolleable del Reporte Analítico */}

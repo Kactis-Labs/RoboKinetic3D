@@ -92,11 +92,11 @@ export function cartesianToPolar(x, y) {
  */
 export function forwardKinematics3DOF({
   theta1Deg = 45,
-  theta2Deg = 30,
-  theta3Deg = -20,
-  l1 = 1.8,
-  l2 = 1.4,
-  hBase = 0.6,
+  theta2Deg = 35,
+  theta3Deg = -25,
+  l1 = 1.75,
+  l2 = 1.45,
+  hBase = 0.60,
 }) {
   const t1Rad = degToRad(theta1Deg);
   const t2Rad = degToRad(theta2Deg);
@@ -182,22 +182,22 @@ export function getKinematicsTelemetry(arg1, arg2) {
       theta1Deg: arg1.theta1Deg ?? 45,
       theta2Deg: arg1.theta2Deg ?? 35,
       theta3Deg: arg1.theta3Deg ?? -25,
-      l1: arg1.l1 ?? 1.8,
-      l2: arg1.l2 ?? 1.4,
-      hBase: arg1.hBase ?? 0.6,
+      l1: arg1.l1 ?? 1.75,
+      l2: arg1.l2 ?? 1.45,
+      hBase: arg1.hBase ?? 0.60,
     };
   } else {
     // Modo compatibilidad si se le pasa (r, thetaDeg)
-    const rParam = Number(arg1) || 3.5;
+    const rParam = Number(arg1) || 3.20;
     const t1Param = Number(arg2) || 45;
     // Si se pasa r, repartimos proporcionalmente entre l1 y l2
     params = {
       theta1Deg: t1Param,
-      theta2Deg: 30,
-      theta3Deg: -20,
-      l1: rParam * 0.56,
-      l2: rParam * 0.44,
-      hBase: 0.6,
+      theta2Deg: 35,
+      theta3Deg: -25,
+      l1: rParam * 0.55,
+      l2: rParam * 0.45,
+      hBase: 0.60,
     };
   }
 
@@ -367,7 +367,7 @@ export function getKinematicsTelemetry(arg1, arg2) {
 
       formulaBeta: "cos(β) = (L₁² + ρ² - L₂²) / (2 · L₁ · ρ)",
       substitutionBeta: `cos(β) = [(${fmt(l1Val, 2)})² + (${fmt(rho, 2)})² - (${fmt(l2Val, 2)})²] / [2 · ${fmt(l1Val, 2)} · ${fmt(rho, 2)}] = ${fmt(cosBeta, 4)}`,
-      resultBetaDeg: `${fmt(betaDeg, 2)}°`,
+      resultBetaDeg: `${fmt(betaDeg, 2)}°`,/*  */
 
       formulaTheta2: "θ₂ = φ + β",
       substitutionTheta2: `θ₂ = ${fmt(phiDeg, 2)}° + ${fmt(betaDeg, 2)}°`,
@@ -375,3 +375,71 @@ export function getKinematicsTelemetry(arg1, arg2) {
     },
   };
 }
+
+/**
+ * CINEMÁTICA INVERSA 3D RESOLVER (INVERSE KINEMATICS - 3 DOF)
+ * Resuelve los ángulos articulares exactos (θ₁, θ₂, θ₃) a partir de una coordenada cartesiana objetivo (X, Y, Z).
+ * 
+ * @param {object} params
+ * @param {number} params.targetX - Coordenada objetivo X en la mesa
+ * @param {number} params.targetY - Coordenada objetivo Y en la mesa
+ * @param {number} params.targetZ - Altura objetivo Z
+ * @param {number} [params.l1=1.8] - Longitud del brazo
+ * @param {number} [params.l2=1.4] - Longitud del antebrazo
+ * @param {number} [params.hBase=0.6] - Altura del pedestal
+ * @param {'down'|'up'} [params.elbowConfig='down'] - Solución codo abajo (estándar industrial) o codo arriba
+ * @returns {{ isReachable: boolean, theta1Deg: number, theta2Deg: number, theta3Deg: number, rho: number, r: number, deltaZ: number }}
+ */
+export function inverseKinematics3DOF({
+  targetX,
+  targetY,
+  targetZ,
+  l1 = 1.75,
+  l2 = 1.45,
+  hBase = 0.60,
+  elbowConfig = 'down',
+}) {
+  // 1. Servomotor Base (J1): Azimuth Yaw
+  const t1Rad = Math.atan2(targetY, targetX);
+  const t1Deg = radToDeg(t1Rad);
+
+  // 2. Proyección radial plana y altura relativa al eje del hombro
+  const r = Math.hypot(targetX, targetY);
+  const deltaZ = targetZ - hBase;
+
+  // 3. Distancia esférica 3D euclídea desde el pivote del hombro (0, 0, hBase)
+  const rho = Math.hypot(r, deltaZ);
+  const maxReach = l1 + l2;
+  const minReach = Math.abs(l1 - l2);
+
+  // Verificar si la meta está dentro de la envolvente de trabajo física
+  const isReachable = rho >= minReach && rho <= maxReach;
+  const safeRho = Math.max(minReach + 1e-4, Math.min(maxReach - 1e-4, rho));
+
+  // 4. Servomotor Codo (J3): Ley de Cosenos
+  let cosT3 = (safeRho * safeRho - l1 * l1 - l2 * l2) / (2 * l1 * l2);
+  cosT3 = Math.max(-1, Math.min(1, cosT3));
+  const t3Sign = elbowConfig === 'up' ? 1 : -1;
+  const t3Rad = t3Sign * Math.acos(cosT3);
+  const t3Deg = radToDeg(t3Rad);
+
+  // 5. Servomotor Hombro (J2): Descomposición φ + β
+  const phiRad = Math.atan2(deltaZ, r);
+  let cosBeta = (l1 * l1 + safeRho * safeRho - l2 * l2) / (2 * l1 * safeRho);
+  cosBeta = Math.max(-1, Math.min(1, cosBeta));
+  const betaRad = Math.acos(cosBeta);
+
+  const t2Rad = phiRad - (t3Sign * betaRad);
+  const t2Deg = radToDeg(t2Rad);
+
+  return {
+    isReachable,
+    theta1Deg: cleanZero(t1Deg),
+    theta2Deg: cleanZero(t2Deg),
+    theta3Deg: cleanZero(t3Deg),
+    rho: cleanZero(rho),
+    r: cleanZero(r),
+    deltaZ: cleanZero(deltaZ),
+  };
+}
+

@@ -5,6 +5,7 @@ import PropertyManager from './components/PropertyManager';
 import Viewport3D from './components/Viewport3D';
 import MathReportPanel from './components/MathReportPanel';
 import { getKinematicsTelemetry } from './kinematics';
+import { usePickAndPlace } from './hooks/usePickAndPlace';
 
 export default function App() {
   // 1. Selector de Tema (Light / Dark Mode con persistencia en localStorage)
@@ -24,23 +25,38 @@ export default function App() {
   };
 
   // 2. Parámetros cinemáticos articulares (3 DOF: Base, Hombro, Codo)
-  const [theta1Deg, setTheta1Deg] = useState(45.0); // J1: Giro Base
-  const [theta2Deg, setTheta2Deg] = useState(35.0); // J2: Elevación Hombro
-  const [theta3Deg, setTheta3Deg] = useState(-25.0); // J3: Flexión Codo
+  // Postura inicial Home de seguridad industrial (J1: 0°, J2: 100°, J3: -120°)
+  const [theta1Deg, setTheta1Deg] = useState(0.0); // J1: Giro Base
+  const [theta2Deg, setTheta2Deg] = useState(100.0); // J2: Elevación Hombro
+  const [theta3Deg, setTheta3Deg] = useState(-120.0); // J3: Flexión Codo
 
-  // 3. Parámetros estructurales de eslabones
-  const [l1, setL1] = useState(1.8); // Eslabón 1 (Brazo)
-  const [l2, setL2] = useState(1.4); // Eslabón 2 (Antebrazo)
-  const hBase = 0.6; // Altura fija del pedestal al eje del hombro
+  // 3. Efector Final: Pinza / Gripper Industrial (Apertura 0 mm a 40 mm, reposo neutro inicial en 14 mm)
+  const [gripperAperture, setGripperAperture] = useState(14.0);
 
-  // 4. Disparador de cambio de vista de cámara (Isométrica, Planta, Frontal, Lateral)
+  // 4. Parámetros estructurales de eslabones (Proporción armónica con la base del manipulador)
+  const [l1, setL1] = useState(1.75); // Eslabón 1 (Brazo - 1.75m)
+  const [l2, setL2] = useState(1.45); // Eslabón 2 (Antebrazo - 1.45m)
+  const hBase = 0.60; // Altura del pedestal de la base al eje del hombro (0.60m)
+
+  // 5. Orquestador y Máquina de Estados de Pick & Place
+  const pickAndPlace = usePickAndPlace({
+    setTheta1Deg,
+    setTheta2Deg,
+    setTheta3Deg,
+    setGripperAperture,
+    l1,
+    l2,
+    hBase,
+  });
+
+  // 6. Disparador de cambio de vista de cámara (Isométrica, Planta, Frontal, Lateral)
   const [cameraViewTrigger, setCameraViewTrigger] = useState(null);
 
   const handleSetCameraView = (viewName) => {
     setCameraViewTrigger({ view: viewName, timestamp: Date.now() });
   };
 
-  // 5. Cálculo matemático cinemático en tiempo real
+  // 7. Cálculo matemático cinemático en tiempo real
   const telemetry = useMemo(() => {
     return getKinematicsTelemetry({
       theta1Deg,
@@ -52,21 +68,24 @@ export default function App() {
     });
   }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase]);
 
-  // Restablecer parámetros a valores de fábrica
+  // Restablecer parámetros a valores de fábrica (Home industrial)
   const handleReset = () => {
-    setTheta1Deg(45.0);
-    setTheta2Deg(35.0);
-    setTheta3Deg(-25.0);
-    setL1(1.8);
-    setL2(1.4);
+    pickAndPlace.resetCube();
+    setTheta1Deg(0.0);
+    setTheta2Deg(100.0);
+    setTheta3Deg(-120.0);
+    setGripperAperture(14.0);
+    setL1(1.75);
+    setL2(1.45);
     handleSetCameraView('isometric');
   };
 
   // Ajustar postura predeterminada del robot
-  const handlePosePreset = ({ t1, t2, t3 }) => {
+  const handlePosePreset = ({ t1, t2, t3, grip }) => {
     if (t1 !== undefined) setTheta1Deg(t1);
     if (t2 !== undefined) setTheta2Deg(t2);
     if (t3 !== undefined) setTheta3Deg(t3);
+    if (grip !== undefined) setGripperAperture(grip);
   };
 
   return (
@@ -75,12 +94,11 @@ export default function App() {
         theme === 'dark' ? 'bg-[#0f172a] text-[#f8fafc]' : 'bg-[#f8fafc] text-[#0f172a]'
       }`}
     >
-      {/* Barra de herramientas superior estilo CAD */}
+      {/* Barra de herramientas superior */}
       <Header
         theme={theme}
         toggleTheme={toggleTheme}
         onReset={handleReset}
-        onPosePreset={handlePosePreset}
         onSetCameraView={handleSetCameraView}
       />
 
@@ -101,6 +119,8 @@ export default function App() {
           setTheta2Deg={setTheta2Deg}
           theta3Deg={theta3Deg}
           setTheta3Deg={setTheta3Deg}
+          gripperAperture={gripperAperture}
+          setGripperAperture={setGripperAperture}
           l1={l1}
           setL1={setL1}
           l2={l2}
@@ -108,6 +128,21 @@ export default function App() {
           telemetry={telemetry}
           onPosePreset={handlePosePreset}
           mobileTab={mobileTab}
+          routineStatus={pickAndPlace.routineStatus}
+          currentStepIndex={pickAndPlace.currentStepIndex}
+          totalSteps={pickAndPlace.totalSteps}
+          statusMessage={pickAndPlace.statusMessage}
+          cubeLocation={pickAndPlace.cubeLocation}
+          onStartRoutine={() =>
+            pickAndPlace.startRoutine({
+              theta1Deg,
+              theta2Deg,
+              theta3Deg,
+              gripperAperture,
+            })
+          }
+          onStopRoutine={pickAndPlace.stopRoutine}
+          onResetCube={pickAndPlace.resetCube}
         />
 
         {/* Visor Central Tridimensional Three.js */}
@@ -124,6 +159,12 @@ export default function App() {
           cameraViewTrigger={cameraViewTrigger}
           onSetCameraView={handleSetCameraView}
           mobileTab={mobileTab}
+          gripperAperture={gripperAperture}
+          cubeLocation={pickAndPlace.cubeLocation}
+          routineStatus={pickAndPlace.routineStatus}
+          statusMessage={pickAndPlace.statusMessage}
+          currentStepIndex={pickAndPlace.currentStepIndex}
+          totalSteps={pickAndPlace.totalSteps}
         />
 
         {/* Panel Derecho: Cálculos Matemáticos */}

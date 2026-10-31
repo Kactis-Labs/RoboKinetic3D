@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { degToRad } from '../kinematics';
-import { Compass, Cpu } from 'lucide-react';
+import { PICK_ZONE, PLACE_ZONE } from '../hooks/usePickAndPlace';
+import { Compass, Cpu, Play, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function Viewport3D({
   theme,
@@ -16,6 +17,12 @@ export default function Viewport3D({
   cameraViewTrigger,
   onSetCameraView,
   mobileTab = 'split',
+  gripperAperture = 38,
+  cubeLocation = 'pick',
+  routineStatus = 'IDLE',
+  statusMessage = '',
+  currentStepIndex = 0,
+  totalSteps = 10,
 }) {
   const isDark = theme === 'dark';
   const [showDetails, setShowDetails] = useState(false);
@@ -39,6 +46,11 @@ export default function Viewport3D({
   // Mallas estructurales que escalan con las longitudes
   const link1MeshRef = useRef(null);
   const link2MeshRef = useRef(null);
+
+  // Efector final paramétrico (Mordazas y Cubo interactivo)
+  const jawLeftRef = useRef(null);
+  const jawRightRef = useRef(null);
+  const cubeMeshRef = useRef(null);
 
   // Materiales para actualización de tema
   const materialsRef = useRef({});
@@ -66,9 +78,9 @@ export default function Viewport3D({
     const width = container.clientWidth || 300;
     const height = container.clientHeight || 300;
 
-    // Cámara de perspectiva CAD
+    // Cámara de perspectiva CAD calibrada para celda robótica de 3.2m
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(6.8, 5.8, 8.2);
+    camera.position.set(5.8, 4.6, 6.8);
     cameraRef.current = camera;
 
     // Renderizador WebGL de alta precisión
@@ -86,9 +98,9 @@ export default function Viewport3D({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.02; // No cruzar el suelo
-    controls.minDistance = 2.0;
-    controls.maxDistance = 25;
-    controls.target.set(0, 0.9, 0);
+    controls.minDistance = 1.5;
+    controls.maxDistance = 22;
+    controls.target.set(0, 0.8, 0);
     controlsRef.current = controls;
 
     // Iluminación de Estudio CAD PBR
@@ -111,15 +123,16 @@ export default function Viewport3D({
     rimLight.position.set(0, -2, 10);
     scene.add(rimLight);
 
-    // Cuadrícula métrica técnica (GridHelper)
-    const grid = new THREE.GridHelper(12, 24);
+    // Cuadrícula métrica técnica adaptada a celda robótica de 3.2m
+    const grid = new THREE.GridHelper(10, 20);
     grid.position.y = 0.001;
     scene.add(grid);
     gridRef.current = grid;
 
-    // Anillos concéntricos polares en el suelo (1m a 5m)
+    // Anillos concéntricos polares en el suelo (1m, 2m, 3m, 4m)
     const polarCirclesGroup = new THREE.Group();
-    for (let radius = 1; radius <= 5; radius++) {
+    const radiusList = [1.0, 2.0, 3.0, 4.0];
+    radiusList.forEach((radius) => {
       const circleGeo = new THREE.BufferGeometry();
       const points = [];
       const segments = 96;
@@ -131,10 +144,10 @@ export default function Viewport3D({
       const circleMat = new THREE.LineBasicMaterial({
         color: 0x2563eb,
         transparent: true,
-        opacity: radius === 5 ? 0.35 : 0.16,
+        opacity: radius === 3.0 ? 0.35 : 0.16,
       });
       polarCirclesGroup.add(new THREE.Line(circleGeo, circleMat));
-    }
+    });
     scene.add(polarCirclesGroup);
 
     // Rayos radiales a 0°, 45°, 90°, etc.
@@ -143,7 +156,7 @@ export default function Viewport3D({
       const rad = (deg * Math.PI) / 180;
       const rayGeo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0.002, 0),
-        new THREE.Vector3(Math.cos(rad) * 5.2, 0.002, -Math.sin(rad) * 5.2),
+        new THREE.Vector3(Math.cos(rad) * 4.5, 0.002, -Math.sin(rad) * 4.5),
       ]);
       const rayMat = new THREE.LineBasicMaterial({
         color: 0x475569,
@@ -156,8 +169,8 @@ export default function Viewport3D({
 
     // Ejes ortogonales principales sobre el suelo (X: Verde esmeralda, Y: Índigo)
     const xAxisGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-6, 0.003, 0),
-      new THREE.Vector3(6, 0.003, 0),
+      new THREE.Vector3(-4.5, 0.003, 0),
+      new THREE.Vector3(4.5, 0.003, 0),
     ]);
     const xAxisLine = new THREE.Line(xAxisGeo, new THREE.LineBasicMaterial({
       color: 0x047857,
@@ -168,8 +181,8 @@ export default function Viewport3D({
     xAxisLineRef.current = xAxisLine;
 
     const yAxisGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0.003, -6),
-      new THREE.Vector3(0, 0.003, 6),
+      new THREE.Vector3(0, 0.003, -4.5),
+      new THREE.Vector3(0, 0.003, 4.5),
     ]);
     const yAxisLine = new THREE.Line(yAxisGeo, new THREE.LineBasicMaterial({
       color: 0x4338ca,
@@ -179,35 +192,37 @@ export default function Viewport3D({
     scene.add(yAxisLine);
     yAxisLineRef.current = yAxisLine;
 
-    // Función constructora de placas de texto para cotas y ejes
-    const createTextSprite = (text, textColor, isDarkTheme, scaleX = 1.0) => {
+    // Función constructora de placas de texto sutiles para los extremos de los ejes
+    const createTextSprite = (text, textColor, isDarkTheme) => {
       const canvas = document.createElement('canvas');
-      canvas.width = 180;
-      canvas.height = 70;
+      canvas.width = 128;
+      canvas.height = 56;
       const ctx = canvas.getContext('2d');
 
-      ctx.fillStyle = isDarkTheme ? '#1e293b' : '#ffffff';
+      // Fondo estilizado translúcido, nunca un bloque opaco que tape la escena
+      ctx.fillStyle = isDarkTheme ? 'rgba(30, 41, 59, 0.82)' : 'rgba(255, 255, 255, 0.85)';
       if (ctx.roundRect) {
-        ctx.roundRect(8, 8, 164, 54, 8);
+        ctx.roundRect(4, 4, 120, 48, 6);
       } else {
-        ctx.rect(8, 8, 164, 54);
+        ctx.rect(4, 4, 120, 48);
       }
       ctx.fill();
 
-      ctx.strokeStyle = isDarkTheme ? '#475569' : '#cbd5e1';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = isDarkTheme ? '#475569' : '#94a3b8';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       ctx.fillStyle = textColor;
-      ctx.font = 'bold 28px "JetBrains Mono", monospace';
+      ctx.font = 'bold 24px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, 90, 36);
+      ctx.fillText(text, 64, 28);
 
       const texture = new THREE.CanvasTexture(canvas);
-      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      // depthTest: true respeta las oclusiones tridimensionales para no flotar tapando objetos
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(scaleX, 0.42 * scaleX, 1);
+      sprite.scale.set(0.36, 0.16, 1);
       return sprite;
     };
 
@@ -220,19 +235,19 @@ export default function Viewport3D({
       const yColor = dark ? '#818cf8' : '#4338ca';
 
       const sX = createTextSprite('+X', xColor, dark);
-      sX.position.set(5.7, 0.25, 0);
+      sX.position.set(4.65, 0.08, 0);
       spriteGroup.add(sX);
 
       const sMinusX = createTextSprite('-X', xColor, dark);
-      sMinusX.position.set(-5.7, 0.25, 0);
+      sMinusX.position.set(-4.65, 0.08, 0);
       spriteGroup.add(sMinusX);
 
       const sY = createTextSprite('+Y', yColor, dark);
-      sY.position.set(0, 0.25, -5.7);
+      sY.position.set(0, 0.08, -4.65);
       spriteGroup.add(sY);
 
       const sMinusY = createTextSprite('-Y', yColor, dark);
-      sMinusY.position.set(0, 0.25, 5.7);
+      sMinusY.position.set(0, 0.08, 4.65);
       spriteGroup.add(sMinusY);
     };
     updateSprites(isDark);
@@ -240,17 +255,21 @@ export default function Viewport3D({
     spriteUpdaterRef.current = updateSprites;
 
     // =========================================================================
-    // 2. CONSTRUCCIÓN DETALLADA DEL ROBOT ARTICULADO (3 DOF Y SERVOMOTORES)
+    // 2. CONSTRUCCIÓN DETALLADA DEL ROBOT ARTICULADO (PALETA INDUSTRIAL KUKA)
     // =========================================================================
-    // Materiales PBR
-    const matBase = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.35, metalness: 0.75 });
-    const matServoBody = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.25, metalness: 0.85 });
-    const matServoCap = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.2, metalness: 0.9 });
-    const matServoHorn = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3, metalness: 0.8 }); // Dorado técnico
-    const matArm1 = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.25, metalness: 0.7 });
-    const matArm2 = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.25, metalness: 0.75 });
-    const matAccent = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.2, metalness: 0.85 });
-    const matGripper = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.9 });
+    // Eslabones y estructura principal en Naranja KUKA característico (RAL 2004)
+    const matArm1 = new THREE.MeshStandardMaterial({ color: 0xeb5b00, roughness: 0.28, metalness: 0.35 });
+    const matArm2 = new THREE.MeshStandardMaterial({ color: 0xeb5b00, roughness: 0.28, metalness: 0.35 });
+    const matAccent = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.35, metalness: 0.8 }); // Grafito oscuro en refuerzos
+    // Base y carcasas de fundición en grafito oscuro / antracita industrial
+    const matBase = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.40, metalness: 0.70 });
+    const matServoBody = new THREE.MeshStandardMaterial({ color: 0x181b22, roughness: 0.30, metalness: 0.85 });
+    const matServoCap = new THREE.MeshStandardMaterial({ color: 0x3f4654, roughness: 0.25, metalness: 0.85 });
+    const matServoHorn = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.30, metalness: 0.80 }); // Acero maquinado / titanio
+    // Efector Final: Pinza / Gripper en Grafito Oscuro integral
+    const matGripperBody = new THREE.MeshStandardMaterial({ color: 0x1c2028, roughness: 0.35, metalness: 0.85 }); // Carcasa grafito oscuro
+    const matGripperAccent = new THREE.MeshStandardMaterial({ color: 0x272c35, roughness: 0.35, metalness: 0.80 }); // Mordazas en grafito
+    const matGripperPad = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.90, metalness: 0.10 }); // Goma negra de fricción
 
     materialsRef.current = {
       matBase,
@@ -260,7 +279,9 @@ export default function Viewport3D({
       matArm1,
       matArm2,
       matAccent,
-      matGripper,
+      matGripperBody,
+      matGripperAccent,
+      matGripperPad,
     };
 
     /**
@@ -356,30 +377,30 @@ export default function Viewport3D({
     turntableMesh.castShadow = true;
     turntableGroup.add(turntableMesh);
 
-    // Orejetas verticales de soporte del hombro (Twin Brackets)
+    // Orejetas verticales de soporte del hombro (Twin Brackets en Naranja KUKA)
     const bracketWidth = 0.12;
-    const bracketHeight = 0.54;
+    const bracketHeight = 0.24;
     const bracketGeo = new THREE.BoxGeometry(0.32, bracketHeight, bracketWidth);
-    const bracketLeft = new THREE.Mesh(bracketGeo, matBase);
-    bracketLeft.position.set(0, bracketHeight * 0.5 + 0.12, 0.24);
+    const bracketLeft = new THREE.Mesh(bracketGeo, matArm1);
+    bracketLeft.position.set(0, bracketHeight * 0.5, 0.24);
     bracketLeft.castShadow = true;
     turntableGroup.add(bracketLeft);
 
-    const bracketRight = new THREE.Mesh(bracketGeo, matBase);
-    bracketRight.position.set(0, bracketHeight * 0.5 + 0.12, -0.24);
+    const bracketRight = new THREE.Mesh(bracketGeo, matArm1);
+    bracketRight.position.set(0, bracketHeight * 0.5, -0.24);
     bracketRight.castShadow = true;
     turntableGroup.add(bracketRight);
 
     // Servomotor J2 (Hombro - Montado horizontalmente entre las orejetas)
     const servoJ2 = createServoModel('J2_SHOULDER', 0.44, 0.18, false);
-    servoJ2.position.set(0, 0.58, 0); // Eje a altura hBase ~ 0.60m desde el suelo
+    servoJ2.position.set(0, 0.22, 0); // Eje a altura hBase = 0.60m desde el suelo (0.38 + 0.22 = 0.60m)
     turntableGroup.add(servoJ2);
 
     // C) PIVOTE DEL HOMBRO (J2 Pitch: rota en Z local según theta2)
-    // El eje del hombro se ubica a altura hBase (0.6m desde el suelo)
-    // Dentro de turntableGroup, hBase corresponde a 0.60 - 0.38 = 0.22m
+    // El eje del hombro se ubica exactamente a altura hBase (0.60m desde el suelo)
+    // Dentro de turntableGroup (Y=0.38), hBase corresponde a 0.60 - 0.38 = 0.22m
     const shoulderPivot = new THREE.Group();
-    shoulderPivot.position.set(0, 0.58, 0); // Coincide con el eje de rotación del servo J2
+    shoulderPivot.position.set(0, 0.22, 0); // Coincide exactamente con hBase y el eje del servo J2
     turntableGroup.add(shoulderPivot);
     shoulderPivotRef.current = shoulderPivot;
 
@@ -445,46 +466,357 @@ export default function Viewport3D({
 
     link2MeshRef.current = link2Group;
 
-    // E) Efector Final (Muñeca + Tool Center Point TCP)
+    // E) Efector Final Industrial: Gripper Robótico Articulado de 2 Dedos (Montaje Lineal en Antebrazo)
+    // Montado longitudinalmente al final de L2 en prolongación natural del antebrazo.
+    // El Tool Center Point (TCP) se ubica exactamente en la cota cinemática L2.
     const tcpGroup = new THREE.Group();
-    tcpGroup.position.set(1.4, 0, 0); // Se ajusta dinámicamente con L2
+    tcpGroup.position.set(1.0, 0, 0); // Se ajusta dinámicamente con L2 (en L2 - 0.55)
     elbowPivot.add(tcpGroup);
     tcpMarkerRef.current = tcpGroup;
 
-    // Muñeca con brida cilíndrica
-    const wristGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.1, 24);
-    wristGeo.rotateZ(Math.PI / 2);
-    const wrist = new THREE.Mesh(wristGeo, matServoCap);
-    wrist.castShadow = true;
-    tcpGroup.add(wrist);
+    // 1. Brida de Muñeca (Flange de acople ISO en aleación pulida)
+    const wristFlangeGeo = new THREE.CylinderGeometry(0.18, 0.20, 0.08, 32);
+    wristFlangeGeo.rotateZ(Math.PI / 2);
+    const wristFlange = new THREE.Mesh(wristFlangeGeo, matServoCap);
+    wristFlange.position.set(0.04, 0, 0);
+    wristFlange.castShadow = true;
+    tcpGroup.add(wristFlange);
 
-    // Pinza de agarre de dos dedos (Gripper mecánico estilizado)
-    const fingerGeo = new THREE.BoxGeometry(0.18, 0.04, 0.035);
-    const finger1 = new THREE.Mesh(fingerGeo, matGripper);
-    finger1.position.set(0.1, 0, 0.07);
-    finger1.rotation.y = -0.15;
-    finger1.castShadow = true;
-    tcpGroup.add(finger1);
+    // Pernos perimetrales en la brida de la muñeca
+    const boltCircleRadius = 0.15;
+    for (let b = 0; b < 6; b++) {
+      const bAng = (b / 6) * Math.PI * 2;
+      const boltMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.018, 0.02, 8),
+        matServoHorn
+      );
+      boltMesh.rotateZ(Math.PI / 2);
+      boltMesh.position.set(0.04, Math.sin(bAng) * boltCircleRadius, Math.cos(bAng) * boltCircleRadius);
+      tcpGroup.add(boltMesh);
+    }
 
-    const finger2 = new THREE.Mesh(fingerGeo, matGripper);
-    finger2.position.set(0.1, 0, -0.07);
-    finger2.rotation.y = 0.15;
-    finger2.castShadow = true;
-    tcpGroup.add(finger2);
+    // 2. Carcasa Principal del Gripper (Grafito Oscuro y Azul Cobalto Mecanizado)
+    const gripperBaseGroup = new THREE.Group();
+    tcpGroup.add(gripperBaseGroup);
 
-    // Esfera emisiva indicadora de posición TCP
-    const tcpSphereGeo = new THREE.SphereGeometry(0.09, 32, 32);
+    // Cuello de montaje cónico
+    const neckGeo = new THREE.CylinderGeometry(0.14, 0.17, 0.08, 28);
+    neckGeo.rotateZ(Math.PI / 2);
+    const neckMesh = new THREE.Mesh(neckGeo, matGripperBody);
+    neckMesh.position.set(0.12, 0, 0);
+    neckMesh.castShadow = true;
+    gripperBaseGroup.add(neckMesh);
+
+    // Bloque central del actuador (ancho y robusto para abarcar el cubo)
+    const bodyActuatorGeo = new THREE.BoxGeometry(0.20, 0.24, 0.56);
+    const bodyActuator = new THREE.Mesh(bodyActuatorGeo, matGripperBody);
+    bodyActuator.position.set(0.22, 0, 0);
+    bodyActuator.castShadow = true;
+    gripperBaseGroup.add(bodyActuator);
+
+    // Placa frontal maquinada de sujeción (tapa frontal metálica)
+    const frontPlateGeo = new THREE.BoxGeometry(0.03, 0.22, 0.52);
+    const frontPlate = new THREE.Mesh(frontPlateGeo, matServoCap);
+    frontPlate.position.set(0.32, 0, 0);
+    gripperBaseGroup.add(frontPlate);
+
+    // 4 pernos frontales en la tapa
+    const frontBolts = [
+      [-0.075, -0.19],
+      [-0.075, 0.19],
+      [0.075, -0.19],
+      [0.075, 0.19],
+    ];
+    frontBolts.forEach(([by, bz]) => {
+      const fb = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8),
+        matServoHorn
+      );
+      fb.rotateZ(Math.PI / 2);
+      fb.position.set(0.335, by, bz);
+      gripperBaseGroup.add(fb);
+    });
+
+    /**
+     * Función constructora de Dedo Articulado Industrial (con garras envolventes que abrazan el cubo)
+     * @param {boolean} isLeft - Si es dedo izquierdo (+Z) o derecho (-Z)
+     */
+    const createArticulatedFinger = (isLeft) => {
+      const fingerRoot = new THREE.Group();
+      // Pivote base espaciado lateralmente en la carcasa (Z = +-0.26)
+      const zSign = isLeft ? 1 : -1;
+      fingerRoot.position.set(0.28, 0, zSign * 0.26);
+
+      // Pasador del pivote base (bulón de acero pulido)
+      const pinBaseGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.09, 16);
+      const pinBase = new THREE.Mesh(pinBaseGeo, matServoHorn);
+      fingerRoot.add(pinBase);
+
+      // --- Falange Proximal ---
+      const proximalGroup = new THREE.Group();
+      fingerRoot.add(proximalGroup);
+
+      // Viga superior angulada hacia el frente (Azul Cobalto Industrial)
+      const upperBarGeo = new THREE.BoxGeometry(0.18, 0.065, 0.04);
+      const upperBar = new THREE.Mesh(upperBarGeo, matGripperAccent);
+      upperBar.position.set(0.08, 0.045, -zSign * 0.01);
+      upperBar.rotation.z = 0.06;
+      upperBar.castShadow = true;
+      proximalGroup.add(upperBar);
+
+      // Viga inferior con refuerzo estructural
+      const lowerBarGeo = new THREE.BoxGeometry(0.17, 0.055, 0.04);
+      const lowerBar = new THREE.Mesh(lowerBarGeo, matGripperAccent);
+      lowerBar.position.set(0.07, -0.045, -zSign * 0.01);
+      lowerBar.rotation.z = -0.05;
+      lowerBar.castShadow = true;
+      proximalGroup.add(lowerBar);
+
+      // Nudillo de articulación intermedia (codo del dedo en grafito maquinado)
+      const knuckleGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.08, 16);
+      const knuckle = new THREE.Mesh(knuckleGeo, matGripperBody);
+      knuckle.position.set(0.16, 0, -zSign * 0.02);
+      knuckle.castShadow = true;
+      proximalGroup.add(knuckle);
+
+      // --- Falange Distal / Mandíbula de Agarre Envolvente ---
+      // Se articula en el nudillo (local X = 0.16)
+      const clawGroup = new THREE.Group();
+      clawGroup.position.set(0.16, 0, -zSign * 0.02);
+      proximalGroup.add(clawGroup);
+
+      // Cuerpo longitudinal de la garra (largo para envolver el cubo en toda su profundidad)
+      const jawBodyGeo = new THREE.BoxGeometry(0.26, 0.095, 0.045);
+      const jawBody = new THREE.Mesh(jawBodyGeo, matGripperAccent);
+      jawBody.position.set(0.13, 0, 0);
+      jawBody.castShadow = true;
+      clawGroup.add(jawBody);
+
+      // Punta enganchada hacia el interior que envuelve la esquina frontal del cubo
+      const hookGeo = new THREE.BoxGeometry(0.06, 0.09, 0.055);
+      const hook = new THREE.Mesh(hookGeo, matGripperAccent);
+      hook.position.set(0.25, 0, -zSign * 0.035);
+      hook.rotation.y = -zSign * 0.45;
+      hook.castShadow = true;
+      clawGroup.add(hook);
+
+      // Almohadilla interna de fricción (contacto plano de 22 cm a lo largo de la cara del cubo)
+      // Situada de forma que a 29mm la distancia entre caras internas es de 0.32m exactos
+      const padLength = 0.22;
+      const padMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(padLength, 0.088, 0.022),
+        matGripperPad
+      );
+      padMesh.position.set(0.11, 0, -zSign * 0.069);
+      clawGroup.add(padMesh);
+
+      // Dientes / estrías transversales maquinadas de alta fricción
+      const toothCount = 7;
+      for (let t = 0; t < toothCount; t++) {
+        const toothX = 0.01 + (t / (toothCount - 1)) * 0.20;
+        const toothMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.014, 0.078, 0.012),
+          matServoCap
+        );
+        toothMesh.position.set(toothX, 0, -zSign * 0.078);
+        clawGroup.add(toothMesh);
+      }
+
+      return {
+        fingerRoot,
+        proximalGroup,
+        clawGroup,
+      };
+    };
+
+    // Crear dedo izquierdo (+Z) y derecho (-Z)
+    const fingerLeftObj = createArticulatedFinger(true);
+    tcpGroup.add(fingerLeftObj.fingerRoot);
+    jawLeftRef.current = fingerLeftObj.fingerRoot;
+
+    const fingerRightObj = createArticulatedFinger(false);
+    tcpGroup.add(fingerRightObj.fingerRoot);
+    jawRightRef.current = fingerRightObj.fingerRoot;
+
+    // Marcador visual centrado del punto de agarre (TCP) exacto (en X = 0.55)
+    const tcpSphereGeo = new THREE.SphereGeometry(0.035, 16, 16);
     const tcpSphereMat = new THREE.MeshStandardMaterial({
-      color: 0x2563eb,
-      emissive: 0x1d4ed8,
-      emissiveIntensity: 0.35,
+      color: 0x38bdf8,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.8,
       roughness: 0.2,
       metalness: 0.8,
     });
     const tcpSphere = new THREE.Mesh(tcpSphereGeo, tcpSphereMat);
-    tcpSphere.position.x = 0.14;
-    tcpSphere.castShadow = true;
+    tcpSphere.position.set(0.55, 0, 0); // Exacto centro de agarre entre las almohadillas
     tcpGroup.add(tcpSphere);
+
+    // =========================================================================
+    // 2.5. ENTORNO INTERACTIVO INDUSTRIAL: ZONAS EN EL SUELO Y CUBO MÉTRICO
+    // =========================================================================
+    /**
+     * Generador de textura serigrafiada para la diana del suelo (Plano, sin cuadros blancos flotantes)
+     */
+    /**
+     * Generador de textura para demarcación industrial del suelo (Realista, sobria, sin neones Tron)
+     */
+    const createFloorZoneCanvasTexture = (zoneText, subText, accentColorHexStr) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.clearRect(0, 0, 512, 512);
+
+      // 1. Placa circular base en gris industrial mate
+      ctx.beginPath();
+      ctx.arc(256, 256, 236, 0, Math.PI * 2);
+      ctx.fillStyle = '#1e242d';
+      ctx.fill();
+
+      // 2. Anillo perimetral técnico de delimitación
+      ctx.beginPath();
+      ctx.arc(256, 256, 230, 0, Math.PI * 2);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = accentColorHexStr;
+      ctx.stroke();
+
+      // 3. Círculo interior fino de referencia
+      ctx.beginPath();
+      ctx.arc(256, 256, 185, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#334155';
+      ctx.stroke();
+
+      // 4. Marcadores de esquina de asentamiento de pieza (Workpiece Docking Brackets)
+      const halfBox = 75;
+      const bracketLen = 26;
+      const left = 256 - halfBox;
+      const right = 256 + halfBox;
+      const top = 256 - halfBox;
+      const bottom = 256 + halfBox;
+
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = accentColorHexStr;
+      ctx.lineCap = 'square';
+
+      // Esquina Sup-Izq
+      ctx.beginPath();
+      ctx.moveTo(left, top + bracketLen);
+      ctx.lineTo(left, top);
+      ctx.lineTo(left + bracketLen, top);
+      ctx.stroke();
+
+      // Esquina Sup-Der
+      ctx.beginPath();
+      ctx.moveTo(right - bracketLen, top);
+      ctx.lineTo(right, top);
+      ctx.lineTo(right, top + bracketLen);
+      ctx.stroke();
+
+      // Esquina Inf-Izq
+      ctx.beginPath();
+      ctx.moveTo(left, bottom - bracketLen);
+      ctx.lineTo(left, bottom);
+      ctx.lineTo(left + bracketLen, bottom);
+      ctx.stroke();
+
+      // Esquina Inf-Der
+      ctx.beginPath();
+      ctx.moveTo(right - bracketLen, bottom);
+      ctx.lineTo(right, bottom);
+      ctx.lineTo(right, bottom - bracketLen);
+      ctx.stroke();
+
+      // 5. Cruz central técnica
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#64748b';
+      ctx.beginPath();
+      ctx.moveTo(256 - 14, 256);
+      ctx.lineTo(256 + 14, 256);
+      ctx.moveTo(256, 256 - 14);
+      ctx.lineTo(256, 256 + 14);
+      ctx.stroke();
+
+      // 6. Rótulos industriales limpios
+      ctx.font = 'bold 30px "JetBrains Mono", sans-serif';
+      ctx.fillStyle = '#f8fafc';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(zoneText, 256, 305);
+
+      ctx.font = '600 15px "JetBrains Mono", sans-serif';
+      ctx.fillStyle = accentColorHexStr;
+      ctx.fillText(subText, 256, 335);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = 4;
+      return texture;
+    };
+
+    // Helper para crear plataformas de zonas de trabajo integradas al suelo
+    const createWorkZonePlatform = (zone, labelText, subText, colorStr) => {
+      const zoneGroup = new THREE.Group();
+      zoneGroup.position.set(zone.x, 0.005, -zone.y);
+
+      // Disco metálico plano en el suelo (1.4m de diámetro) con acabado acero maquinado
+      const discGeo = new THREE.CylinderGeometry(0.65, 0.70, 0.018, 40);
+      const discMat = new THREE.MeshStandardMaterial({
+        color: 0x242b35,
+        roughness: 0.45,
+        metalness: 0.65,
+      });
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.y = 0.009;
+      disc.receiveShadow = true;
+      zoneGroup.add(disc);
+
+      // Gráfico técnico plano sobre la superficie del disco
+      const floorPlaneGeo = new THREE.PlaneGeometry(1.20, 1.20);
+      floorPlaneGeo.rotateX(-Math.PI / 2);
+      const floorMat = new THREE.MeshBasicMaterial({
+        map: createFloorZoneCanvasTexture(labelText, subText, colorStr),
+        transparent: true,
+        depthWrite: false,
+      });
+      const floorGraphic = new THREE.Mesh(floorPlaneGeo, floorMat);
+      floorGraphic.position.y = 0.019;
+      zoneGroup.add(floorGraphic);
+
+      scene.add(zoneGroup);
+      return zoneGroup;
+    };
+
+    createWorkZonePlatform(PICK_ZONE, 'ZONA PICK', 'CARGA', '#d97706');
+    createWorkZonePlatform(PLACE_ZONE, 'ZONA PLACE', 'DESCARGA', '#2563eb');
+
+    // Cubo Métrico Interactivo de 32x32x32 cm (Aluminio bruñido PBR grande, vistoso y bien visible)
+    const cubeGroup = new THREE.Group();
+    const cubeSize = 0.32; // Tamaño industrial robusto y proporcionado
+    const cubeGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const cubeMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      roughness: 0.2,
+      metalness: 0.9,
+    });
+    const cubeMesh = new THREE.Mesh(cubeGeo, cubeMat);
+    cubeMesh.castShadow = true;
+    cubeMesh.receiveShadow = true;
+    cubeGroup.add(cubeMesh);
+
+    // Aristas visibles de contraste CAD en azul metálico
+    const edgesGeo = new THREE.EdgesGeometry(cubeGeo);
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 2.5 });
+    const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+    cubeGroup.add(edges);
+
+    // Ubicación inicial en reposo en la Zona Pick sobre el pedestal (altura 0.18m)
+    // El cubo reposa plano y orientado armónicamente con la pinza
+    const thetaPickInit = Math.atan2(PICK_ZONE.y, PICK_ZONE.x);
+    cubeGroup.position.set(PICK_ZONE.x, cubeSize / 2 + 0.02, -PICK_ZONE.y);
+    cubeGroup.rotation.set(0, -thetaPickInit, 0);
+    scene.add(cubeGroup);
+    cubeMeshRef.current = cubeGroup;
 
     // =========================================================================
     // 3. COTAS TÉCNICAS Y LÍNEAS DE PROYECCIÓN ORTOGONAL EN EL ESPACIO
@@ -610,9 +942,11 @@ export default function Viewport3D({
         groundTriangleRef.current.material.opacity = 0.16;
       }
 
-      if (materialsRef.current.matBase) materialsRef.current.matBase.color.setHex(0x1e293b);
-      if (materialsRef.current.matArm1) materialsRef.current.matArm1.color.setHex(0x2563eb);
-      if (materialsRef.current.matArm2) materialsRef.current.matArm2.color.setHex(0x3b82f6);
+      if (materialsRef.current.matBase) materialsRef.current.matBase.color.setHex(0x1f242d);
+      if (materialsRef.current.matArm1) materialsRef.current.matArm1.color.setHex(0xeb5b00);
+      if (materialsRef.current.matArm2) materialsRef.current.matArm2.color.setHex(0xeb5b00);
+      if (materialsRef.current.matGripperBody) materialsRef.current.matGripperBody.color.setHex(0x1c2028);
+      if (materialsRef.current.matGripperAccent) materialsRef.current.matGripperAccent.color.setHex(0x272c35);
     } else {
       sceneRef.current.background = new THREE.Color(0xdce5ed);
       gridRef.current.material.color.setHex(0x94a3b8);
@@ -632,9 +966,11 @@ export default function Viewport3D({
         groundTriangleRef.current.material.opacity = 0.14;
       }
 
-      if (materialsRef.current.matBase) materialsRef.current.matBase.color.setHex(0x475569);
-      if (materialsRef.current.matArm1) materialsRef.current.matArm1.color.setHex(0x2563eb);
-      if (materialsRef.current.matArm2) materialsRef.current.matArm2.color.setHex(0x1d4ed8);
+      if (materialsRef.current.matBase) materialsRef.current.matBase.color.setHex(0x334155);
+      if (materialsRef.current.matArm1) materialsRef.current.matArm1.color.setHex(0xeb5b00);
+      if (materialsRef.current.matArm2) materialsRef.current.matArm2.color.setHex(0xeb5b00);
+      if (materialsRef.current.matGripperBody) materialsRef.current.matGripperBody.color.setHex(0x272c35);
+      if (materialsRef.current.matGripperAccent) materialsRef.current.matGripperAccent.color.setHex(0x333b47);
     }
 
     if (spriteUpdaterRef.current) {
@@ -679,13 +1015,14 @@ export default function Viewport3D({
     // El codo rota en su eje transversal local (Z) respecto al eslabón 1
     elbowPivotRef.current.rotation.z = t3Rad;
 
-    // Escalar la longitud del eslabón 2 (L2)
-    link2MeshRef.current.scale.set(l2, 1, 1);
+    // Escalar la longitud del eslabón 2 (L2) hasta la brida en L2 - 0.55
+    link2MeshRef.current.scale.set(Math.max(0.2, l2 - 0.55), 1, 1);
 
-    // Posicionar el efector final TCP al final del eslabón 2 (X = L2)
-    tcpMarkerRef.current.position.set(l2, 0, 0);
+    // Posicionar el efector final en la muñeca (X = L2 - 0.55) en prolongación natural del antebrazo
+    tcpMarkerRef.current.position.set(Math.max(0.2, l2 - 0.55), 0, 0);
+    tcpMarkerRef.current.rotation.set(0, 0, 0); // Orientación lineal y continua con el antebrazo
 
-    // Coordenadas cartesianas espaciales calculadas
+    // Coordenadas cartesianas espaciales calculadas del TCP (en la punta entre las mordazas)
     const x = telemetry.direct.xRaw;
     const yDepth = -telemetry.direct.yRaw; // Profundidad en Three.js (-Z)
     const zHeight = telemetry.direct.zRaw; // Altura en Three.js (+Y)
@@ -746,6 +1083,11 @@ export default function Viewport3D({
       lineDirect3DRef.current.computeLineDistances();
     }
 
+    // G) Diana / Retícula del efector proyectada en el suelo
+    if (groundTargetRef.current) {
+      groundTargetRef.current.position.set(x, 0.005, yDepth);
+    }
+
     // G) Diana en el suelo en la proyección (X, Y)
     if (groundTargetRef.current) {
       groundTargetRef.current.position.set(x, 0.005, yDepth);
@@ -753,7 +1095,60 @@ export default function Viewport3D({
   }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase, telemetry]);
 
   // =========================================================================
-  // 7. RESPUESTA A CAMBIO DE VISTA DE CÁMARA
+  // 6.5. APERTURA PARAMÉTRICA DE LA PINZA (GRIPPER ARTICULADO)
+  // =========================================================================
+  useEffect(() => {
+    if (!jawLeftRef.current || !jawRightRef.current) return;
+    // Apertura angular de los dedos estilo industrial:
+    // A 0 mm: dedos suavemente cerrados (sin cruzarse bruscamente)
+    // A 14 mm: reposo neutro relajado (postura inicial equilibrada)
+    // A 29 mm: dedos paralelos sujetando y abrazando firmemente las caras del cubo de 32 cm
+    // A 38-40 mm: dedos abiertos con holgura (~43-45 cm) para aproximación/liberación sin colisiones
+    const openAngle =
+      gripperAperture >= 29
+        ? ((gripperAperture - 29) / 11) * 0.20
+        : ((gripperAperture - 29) / 29) * 0.28;
+    jawLeftRef.current.rotation.y = -openAngle;
+    jawRightRef.current.rotation.y = openAngle;
+  }, [gripperAperture]);
+
+  // =========================================================================
+  // 6.6. GESTIÓN Y VINCULACIÓN 3D DEL CUBO MÉTRICO (PARENTING SEAMLESS)
+  // =========================================================================
+  useEffect(() => {
+    if (!cubeMeshRef.current || !sceneRef.current || !tcpMarkerRef.current) return;
+    const cube = cubeMeshRef.current;
+    const cubeSize = 0.32;
+    const cubeCenterHeight = cubeSize / 2 + 0.02; // Altura exacta del centro: 0.18 m
+    const thetaPick = Math.atan2(PICK_ZONE.y, PICK_ZONE.x);
+    const thetaPlace = Math.atan2(PLACE_ZONE.y, PLACE_ZONE.x);
+
+    if (cubeLocation === 'gripped') {
+      // Estado Sujeto: attach() vincula el cubo preservando su postura exacta del suelo.
+      // El cubo no salta ni se teletransporta: mantiene su posición de reposo y, a medida que el brazo
+      // se eleva y traslada por el espacio, el cubo rota rígidamente con la pinza de forma realista.
+      if (cube.parent !== tcpMarkerRef.current) {
+        tcpMarkerRef.current.attach(cube);
+      }
+    } else if (cubeLocation === 'place') {
+      // Estado Depositado en Zona Place: se desvincula en la mesa conservando su orientación plana en la diana
+      if (cube.parent !== sceneRef.current) {
+        sceneRef.current.attach(cube);
+        cube.position.set(PLACE_ZONE.x, cubeCenterHeight, -PLACE_ZONE.y);
+        cube.rotation.set(0, -thetaPlace, 0);
+      }
+    } else {
+      // Estado En reposo en Zona Pick / Reset
+      if (cube.parent !== sceneRef.current) {
+        sceneRef.current.attach(cube);
+      }
+      cube.position.set(PICK_ZONE.x, cubeCenterHeight, -PICK_ZONE.y);
+      cube.rotation.set(0, -thetaPick, 0);
+    }
+  }, [cubeLocation]);
+
+  // =========================================================================
+  // 7. RESPUESTA A CAMBIO DE VISTA DE CÁMARA (CALIBRADA PARA CELDA DE 3.2M)
   // =========================================================================
   useEffect(() => {
     if (!cameraRef.current || !controlsRef.current || !cameraViewTrigger) return;
@@ -762,21 +1157,21 @@ export default function Viewport3D({
 
     switch (cameraViewTrigger.view) {
       case 'top':
-        camera.position.set(0, 12, 0.001);
+        camera.position.set(0, 10.5, 0.001);
         controls.target.set(0, 0, 0);
         break;
       case 'front':
-        camera.position.set(0, 1.8, 10.5);
-        controls.target.set(0, 1.0, 0);
+        camera.position.set(0, 1.8, 9.2);
+        controls.target.set(0, 0.8, 0);
         break;
       case 'side':
-        camera.position.set(10.5, 1.8, 0.001);
-        controls.target.set(0, 1.0, 0);
+        camera.position.set(9.2, 1.8, 0.001);
+        controls.target.set(0, 0.8, 0);
         break;
       case 'isometric':
       default:
-        camera.position.set(6.8, 5.8, 8.2);
-        controls.target.set(0, 0.9, 0);
+        camera.position.set(5.8, 4.6, 6.8);
+        controls.target.set(0, 0.8, 0);
         break;
     }
     controls.update();
@@ -800,8 +1195,8 @@ export default function Viewport3D({
         className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
       />
 
-      {/* Indicador Flotante Superior Izquierdo: Coordenadas CAD en Vivo */}
-      {/* 1. Versión Móvil: Compacta con botón de info */}
+      {/* Indicador Flotante Superior: Mini Panel Resumen */}
+      {/* 1. Versión Móvil: Compacta */}
       <div className="md:hidden absolute top-2.5 left-2.5 z-10 select-none max-w-[calc(100vw-20px)]">
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded border shadow-sm backdrop-blur-md text-[10px] font-math ${
@@ -810,7 +1205,7 @@ export default function Viewport3D({
               : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
           }`}
         >
-          <span className="font-sans font-bold text-[#2563eb]">TCP:</span>
+          <span className="font-sans font-semibold text-[#ea580c]">Coord:</span>
           <span className={`font-bold ${isDark ? 'text-[#34d399]' : 'text-[#047857]'}`}>
             X:{telemetry.direct.resultX}
           </span>
@@ -820,111 +1215,96 @@ export default function Viewport3D({
           <span className={`font-bold ${isDark ? 'text-[#fbbf24]' : 'text-[#b45309]'}`}>
             Z:{telemetry.direct.resultZ}
           </span>
-          <span className="text-slate-400">m</span>
-          <button
-            type="button"
-            onClick={() => setShowDetails(!showDetails)}
-            className={`ml-1 px-1.5 py-0.2 rounded text-[9px] font-sans font-medium transition-colors ${
-              isDark
-                ? 'bg-[#1e293b] text-[#38bdf8] border border-[#334155]'
-                : 'bg-[#e2e8f0] text-[#0284c7] border border-[#cbd5e1]'
-            }`}
-          >
-            {showDetails ? '▲' : '▼'}
-          </button>
+          <span className="text-slate-400">|</span>
+          <span className="font-sans text-[9px] text-slate-400">Ángulos:</span>
+          <span className="font-mono text-[9px] font-semibold">
+            {Number(theta1Deg).toFixed(0)}°·{Number(theta2Deg).toFixed(0)}°·{Number(theta3Deg).toFixed(0)}°
+          </span>
         </div>
-
-        {showDetails && (
-          <div
-            className={`mt-1 px-3 py-2 rounded border shadow-sm backdrop-blur-md space-y-1.5 ${
-              isDark
-                ? 'bg-[#182234]/95 border-[#334155] text-[#f8fafc]'
-                : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[10px] font-math">
-              <span>Radio Suelo r_xy: <strong className="text-[#3b82f6]">{telemetry.direct.resultRGround} m</strong></span>
-              <span>Dist 3D ρ: <strong className="text-[#d97706]">{telemetry.direct.resultRho} m</strong></span>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* 2. Versión Escritorio: TARJETA ORIGINAL EXACTA */}
-      <div className="hidden md:flex absolute top-3 left-3 z-10 pointer-events-none flex-col gap-1.5 select-none">
+      {/* 2. Versión Escritorio: Mini Panel Resumen (Coordenadas y Ángulos debidamente etiquetados) */}
+      <div className="hidden md:flex absolute top-3 left-3 z-10 pointer-events-none select-none">
         <div
-          className={`px-3.5 py-2.5 rounded border shadow-sm backdrop-blur-md space-y-1.5 ${
+          className={`px-3 py-2 rounded-lg border shadow-sm backdrop-blur-md flex flex-col gap-1.5 ${
             isDark
               ? 'bg-[#182234]/90 border-[#334155] text-[#f8fafc]'
               : 'bg-[#ffffff]/95 border-[#cbd5e1] text-[#0f172a]'
           }`}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#2563eb]">
-              <Compass className="w-3.5 h-3.5" />
-              <span>Espacio de Trabajo CAD 3D</span>
-            </div>
-            <span
-              className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
-                isDark ? 'border-[#334155] bg-[#0f172a] text-[#38bdf8]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#0284c7]'
-              }`}
-            >
-              3 DOF
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-xs font-math font-medium">
-            <div className="flex flex-col">
-              <span className={`text-[9px] font-sans ${isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>Cota X:</span>
-              <span className={`font-bold text-xs ${isDark ? 'text-[#34d399]' : 'text-[#047857]'}`}>
+          {/* Fila 1: Coordenadas */}
+          <div className="flex items-center gap-3 text-xs font-math font-medium">
+            <span className="text-[11px] font-sans font-bold text-[#ea580c]">Coordenadas:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-sans font-bold text-emerald-500">X</span>
+              <span className={`font-bold ${isDark ? 'text-[#34d399]' : 'text-[#047857]'}`}>
                 {telemetry.direct.resultX} m
               </span>
             </div>
-            <div className="flex flex-col">
-              <span className={`text-[9px] font-sans ${isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>Cota Y:</span>
-              <span className={`font-bold text-xs ${isDark ? 'text-[#818cf8]' : 'text-[#4338ca]'}`}>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-sans font-bold text-indigo-500">Y</span>
+              <span className={`font-bold ${isDark ? 'text-[#818cf8]' : 'text-[#4338ca]'}`}>
                 {telemetry.direct.resultY} m
               </span>
             </div>
-            <div className="flex flex-col">
-              <span className={`text-[9px] font-sans ${isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>Cota Z:</span>
-              <span className={`font-bold text-xs ${isDark ? 'text-[#fbbf24]' : 'text-[#b45309]'}`}>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-sans font-bold text-amber-500">Z</span>
+              <span className={`font-bold ${isDark ? 'text-[#fbbf24]' : 'text-[#b45309]'}`}>
                 {telemetry.direct.resultZ} m
               </span>
             </div>
           </div>
 
-          <div
-            className={`pt-1 border-t flex items-center justify-between text-[9px] font-math ${
-              isDark ? 'border-[#334155] text-[#94a3b8]' : 'border-[#cbd5e1] text-[#64748b]'
-            }`}
-          >
-            <span>r_xy: <strong className="text-[#3b82f6]">{telemetry.direct.resultRGround} m</strong></span>
-            <span>Dist 3D ρ: <strong className="text-[#d97706]">{telemetry.direct.resultRho} m</strong></span>
+          {/* Fila 2: Ángulos */}
+          <div className="flex items-center gap-2 border-t pt-1 border-inherit font-mono text-[10px]">
+            <span className="font-sans font-semibold text-slate-400 mr-0.5">Ángulos:</span>
+            <span>J1: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta1Deg).toFixed(1)}°</strong></span>
+            <span className="text-slate-400">•</span>
+            <span>J2: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta2Deg).toFixed(1)}°</strong></span>
+            <span className="text-slate-400">•</span>
+            <span>J3: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta3Deg).toFixed(1)}°</strong></span>
           </div>
         </div>
       </div>
 
-      {/* Badges de Articulaciones Activas (Visible en pantallas extra grandes para evitar colisión) */}
-      <div className="absolute top-3 right-3 z-10 pointer-events-none hidden xl:flex flex-col gap-1 select-none">
-        <div
-          className={`px-2.5 py-1.5 rounded border shadow-sm backdrop-blur-md text-[10px] space-y-1 ${
-            isDark ? 'bg-[#182234]/85 border-[#334155] text-[#cbd5e1]' : 'bg-[#ffffff]/90 border-[#cbd5e1] text-[#334155]'
-          }`}
-        >
-          <div className="flex items-center gap-1 font-semibold text-[#2563eb]">
-            <Cpu className="w-3 h-3" />
-            <span>Servomotores Industriales</span>
-          </div>
-          <div className="flex items-center gap-2 font-mono">
-            <span>J1: {Number(theta1Deg).toFixed(1)}°</span>
-            <span>•</span>
-            <span>J2: {Number(theta2Deg).toFixed(1)}°</span>
-            <span>•</span>
-            <span>J3: {Number(theta3Deg).toFixed(1)}°</span>
+      {/* Banner / HUD Flotante Superior: Estado en Vivo de la Rutina Pick & Place */}
+      {(routineStatus === 'RUNNING' || routineStatus === 'COMPLETED') && (
+        <div className="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 pointer-events-none select-none max-w-[92vw]">
+          <div
+            className={`px-3.5 py-2 rounded-lg border shadow-lg backdrop-blur-md flex flex-col gap-1 items-center animate-in fade-in slide-in-from-top-2 duration-200 ${
+              routineStatus === 'COMPLETED'
+                ? isDark
+                  ? 'bg-[#064e3b]/90 border-[#059669] text-[#a7f3d0]'
+                  : 'bg-[#ecfdf5]/95 border-[#10b981] text-[#065f46]'
+                : isDark
+                ? 'bg-[#1e293b]/95 border-[#ea580c] text-[#f8fafc]'
+                : 'bg-[#ffffff]/95 border-[#ea580c] text-[#0f172a]'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {routineStatus === 'RUNNING' ? (
+                <Loader2 className="w-4 h-4 text-[#ea580c] animate-spin shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-[#10b981] shrink-0" />
+              )}
+              <span className="text-xs font-semibold tracking-wide uppercase">
+                {statusMessage || 'Secuencia Pick & Place'}
+              </span>
+              <span className="text-[10px] font-mono opacity-80 font-bold">
+                [{currentStepIndex + 1}/{totalSteps}]
+              </span>
+            </div>
+
+            {/* Barra de progreso de la rutina */}
+            <div className="w-48 h-1 rounded-full bg-slate-500/20 overflow-hidden">
+              <div
+                className="h-full bg-[#2563eb] transition-all duration-300"
+                style={{ width: `${Math.round(((currentStepIndex + 1) / totalSteps) * 100)}%` }}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Vistas Rápidas de Cámara Flotantes en el Viewport (EXCLUSIVO MÓVIL < md) */}
       <div

@@ -19,6 +19,17 @@
   font-family: var(--font-mono);
 }
 
+/* Ocultar flechas/spinners nativos en inputs numéricos para que no tapen los números */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ========================================================
    CONTROLES DESLIZANTES ESTILO CAD TÉCNICO (Sin resplandor neón)
    ======================================================== */
