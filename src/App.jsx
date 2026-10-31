@@ -90,7 +90,7 @@ export default function App() {
 
   return (
     <div
-      className={`h-screen w-screen flex flex-col overflow-hidden theme-${theme} ${
+      className={`h-screen h-[100dvh] w-screen flex flex-col overflow-hidden theme-${theme} ${
         theme === 'dark' ? 'bg-[#0f172a] text-[#f8fafc]' : 'bg-[#f8fafc] text-[#0f172a]'
       }`}
     >
@@ -105,11 +105,11 @@ export default function App() {
       {/* Área de trabajo CAD:
           - En Desktop (md+): Tres columnas completas (PropertyManager, Viewport3D, MathReportPanel)
           - En Móvil (<md): Modos optimizados priorizando 3D + Sliders:
-              * split: 3D arriba (~40vh) y Sliders abajo para interactuar y ver en vivo
+              * split: 3D arriba (~38vh) y Sliders abajo con scroll fluido para interactuar y ver en vivo
               * 3d: Visor 3D a pantalla completa para inspección inmersiva
               * math: Reporte de cálculos matemáticos completo
       */}
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <main className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative">
         {/* Panel Izquierdo: PropertyManager (Sliders y Actuadores) */}
         <PropertyManager
           theme={theme}

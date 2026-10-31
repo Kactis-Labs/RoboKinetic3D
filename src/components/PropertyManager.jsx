@@ -81,16 +81,16 @@ export default function PropertyManager({
     <aside
       className={`${
         mobileTab === 'split'
-          ? 'flex-1 flex flex-col md:flex-none'
+          ? 'flex-1 min-h-0 flex flex-col overflow-hidden md:flex-none'
           : mobileTab === '3d'
           ? 'hidden md:flex md:flex-col md:flex-none'
           : 'hidden md:flex md:flex-col md:flex-none'
-      } w-full md:w-[275px] lg:w-[290px] md:h-full border-r shrink-0 transition-colors select-none text-xs font-sans ${
+      } w-full md:w-[275px] lg:w-[290px] md:h-full border-r md:shrink-0 transition-colors select-none text-xs font-sans ${
         isDark ? 'bg-[#182234] border-[#334155] text-[#F8FAFC]' : 'bg-[#f8fafc] border-[#CBD5E1] text-[#0F172A]'
       }`}
     >
       {/* Encabezado compacto */}
-      <div className={`px-3 py-2 border-b flex items-center justify-between ${colors.headerBg}`}>
+      <div className={`px-3 py-2 border-b flex items-center justify-between shrink-0 ${colors.headerBg}`}>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-[#ea580c] text-white flex items-center justify-center shadow-xs">
             <Sliders className="w-2.5 h-2.5" />
@@ -99,8 +99,8 @@ export default function PropertyManager({
         </div>
       </div>
 
-      {/* Contenedor scrolleable optimizado */}
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 touch-pan-y">
+      {/* Contenedor scrolleable optimizado para táctil y escritorio */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2.5 touch-pan-y overscroll-contain">
         {/* ======================================================== */}
         {/* 1. AUTOMATIZACIÓN PICK & PLACE                           */}
         {/* ======================================================== */}

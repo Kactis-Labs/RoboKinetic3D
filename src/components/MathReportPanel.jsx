@@ -36,8 +36,8 @@ export default function MathReportPanel({
   return (
     <aside
       className={`w-full md:w-[390px] lg:w-[440px] ${
-        mobileTab === 'math' ? 'flex-1 h-full flex flex-col' : 'hidden md:flex md:flex-col'
-      } md:h-full border-0 md:border-l shrink-0 transition-colors select-text ${
+        mobileTab === 'math' ? 'flex-1 min-h-0 h-full flex flex-col overflow-hidden' : 'hidden md:flex md:flex-col'
+      } md:h-full border-0 md:border-l md:shrink-0 transition-colors select-text ${
         isDark
           ? 'bg-[#182234] border-[#334155] text-[#F8FAFC]'
           : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A]'
@@ -45,7 +45,7 @@ export default function MathReportPanel({
     >
       {/* Encabezado: Título exacto "Cálculos Matemáticos" */}
       <div
-        className={`px-3.5 py-2.5 border-b flex items-center justify-between ${
+        className={`px-3.5 py-2.5 border-b flex items-center justify-between shrink-0 ${
           isDark
             ? 'bg-[#141c2b] border-[#334155]'
             : 'bg-[#f1f5f9] border-[#cbd5e1]'
@@ -67,7 +67,7 @@ export default function MathReportPanel({
       </div>
 
       {/* Contenedor scrolleable del Reporte Analítico */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs font-sans touch-pan-y">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4 text-xs font-sans touch-pan-y overscroll-contain">
         {/* ======================================================== */}
         {/* BLOQUE 1: VISTA LATERAL (PLANO VERTICAL r vs Z)          */}
         {/* ======================================================== */}

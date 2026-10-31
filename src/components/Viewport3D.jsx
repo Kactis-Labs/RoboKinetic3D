@@ -1181,7 +1181,7 @@ export default function Viewport3D({
     <div
       className={`relative ${
         mobileTab === 'split'
-          ? 'h-[40vh] sm:h-[45vh] w-full shrink-0 border-b border-[#334155]/60 order-first md:order-none'
+          ? 'h-[38vh] sm:h-[42vh] w-full shrink-0 border-b border-[#334155]/60 order-first md:order-none'
           : mobileTab === '3d'
           ? 'flex-1 h-full w-full'
           : 'hidden md:block'
@@ -1196,8 +1196,12 @@ export default function Viewport3D({
       />
 
       {/* Indicador Flotante Superior: Mini Panel Resumen */}
-      {/* 1. Versión Móvil: Compacta */}
-      <div className="md:hidden absolute top-2.5 left-2.5 z-10 select-none max-w-[calc(100vw-20px)]">
+      {/* 1. Versión Móvil: Compacta (se oculta durante la rutina para evitar superposición con el banner) */}
+      <div
+        className={`md:hidden absolute top-2.5 left-2.5 z-10 select-none max-w-[calc(100vw-20px)] transition-all duration-200 ${
+          routineStatus === 'RUNNING' || routineStatus === 'COMPLETED' ? 'hidden' : 'flex'
+        }`}
+      >
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded border shadow-sm backdrop-blur-md text-[10px] font-math ${
             isDark
