@@ -514,18 +514,20 @@ export function calculateShoulderTorque({
   const reachRatio = leverArmM / maxReachM;
   const torqueRatio = torqueNm / PHYSICAL_LIMITS.safeTorqueLimitNm;
   const riskRatio = Math.max(reachRatio, torqueRatio);
+  const isOverloaded = torqueRatio >= 0.88;
 
   let level = 'green';
   let statusLabel = 'Seguro (Nominal)';
-  if (riskRatio >= 0.88) {
+  if (isOverloaded) {
     level = 'red';
-    statusLabel = 'Sobrecarga (Torque / Alcance Crítico)';
-  } else if (riskRatio >= 0.68) {
+    statusLabel = 'Sobrecarga en Servo (Torque Crítico)';
+  } else if (torqueRatio >= 0.68) {
     level = 'amber';
-    statusLabel = 'Precaución (Carga Media-Alta)';
+    statusLabel = 'Precaución (Torque Medio-Alto)';
+  } else if (reachRatio >= 0.88) {
+    level = 'amber';
+    statusLabel = 'Precaución (Extensión Máxima)';
   }
-
-  const isOverloaded = level === 'red' || torqueNm >= PHYSICAL_LIMITS.safeTorqueLimitNm;
 
   return {
     massKg: cubeConfiguredMassKg,

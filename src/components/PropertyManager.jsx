@@ -165,7 +165,7 @@ export default function PropertyManager({
           text: isDark ? 'text-[#34d399]' : 'text-[#059669]',
         };
 
-  const torquePercent = Math.min(100, Math.round((torque?.riskRatio || 0) * 100));
+  const torquePercent = Math.min(100, Math.round((torque?.torqueRatio || 0) * 100));
 
   return (
     <aside

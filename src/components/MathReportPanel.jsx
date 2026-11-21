@@ -59,7 +59,7 @@ export default function MathReportPanel({
         };
 
   const reachPct = Math.min(100, Math.round((torque?.reachRatio || 0) * 100));
-  const riskPct = Math.min(100, Math.round((torque?.riskRatio || 0) * 100));
+  const torquePct = Math.min(100, Math.round((torque?.torqueRatio || 0) * 100));
 
   return (
     <aside
@@ -402,7 +402,7 @@ export default function MathReportPanel({
                 <div className="w-full h-1.5 rounded-full bg-slate-500/20 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-200 ${torqueTheme.bar}`}
-                    style={{ width: `${riskPct}%` }}
+                    style={{ width: `${torquePct}%` }}
                   />
                 </div>
               </div>

@@ -272,7 +272,20 @@ assert.ok(Math.abs(tUngrippedSmall.torqueNm - tUngrippedHeavy.torqueNm) < 1e-6, 
 assert.ok(tUngrippedSmall.torqueNm > 0, 'Eslabones y pinza vacía generan torque realista > 0');
 assert.equal(tUngrippedSmall.level, 'green');
 
-// 4.4 Sujetando cubo pesado (10.0 kg en Zona Pick o 5.0 kg a largo alcance) genera sobrecarga
+// 4.4 Brazo extendido en vacío (r = 3.17 m, sin cubo) NO debe generar sobrecarga (solo precaución ámbar)
+const tEmptyMaxReach = calculateShoulderTorque({
+  rHorizontal: 3.17,
+  payloadMassKg: 4.8,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 11,
+  theta3Deg: -9.5,
+  isGripped: false,
+});
+assert.equal(tEmptyMaxReach.isOverloaded, false, 'En vacío a 3.17 m no hay sobrecarga de torque');
+assert.equal(tEmptyMaxReach.level, 'amber', 'En vacío a 3.17 m debe marcar precaución ámbar por extensión máxima');
+
+// 4.5 Sujetando cubo pesado (10.0 kg en Zona Pick o 5.0 kg a largo alcance) genera sobrecarga
 const tOverloadPick = calculateShoulderTorque({
   rHorizontal: 2.1225,
   payloadMassKg: 10.0,
