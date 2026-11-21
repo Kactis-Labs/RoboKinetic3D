@@ -272,7 +272,20 @@ assert.ok(Math.abs(tUngrippedSmall.torqueNm - tUngrippedHeavy.torqueNm) < 1e-6, 
 assert.ok(tUngrippedSmall.torqueNm > 0, 'Eslabones y pinza vacía generan torque realista > 0');
 assert.equal(tUngrippedSmall.level, 'green');
 
-// 4.4 Sujetando cubo pesado a largo alcance genera sobrecarga (isOverloaded === true)
+// 4.4 Sujetando cubo pesado (10.0 kg en Zona Pick o 5.0 kg a largo alcance) genera sobrecarga
+const tOverloadPick = calculateShoulderTorque({
+  rHorizontal: 2.1225,
+  payloadMassKg: 10.0,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 30.65,
+  theta3Deg: -95.47,
+  isGripped: true,
+});
+assert.equal(tOverloadPick.activeCubeMassKg, 10.0);
+assert.equal(tOverloadPick.level, 'red');
+assert.equal(tOverloadPick.isOverloaded, true);
+
 const tOverload = calculateShoulderTorque({
   rHorizontal: 3.20,
   payloadMassKg: 5.0,

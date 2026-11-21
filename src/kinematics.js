@@ -33,7 +33,7 @@ export const PHYSICAL_LIMITS = {
   gravity: 9.81,          // Aceleración de la gravedad (m/s²)
   defaultMassKg: 2.0,     // Masa de carga del cubo por defecto (kg)
   minMassKg: 0.5,
-  maxMassKg: 5.0,
+  maxMassKg: 10.0,
   gripperMassKg: 0.30,    // Masa propia de la pinza vacía (kg)
   link1DensityKgPerM: 1.4,// Densidad lineal del brazo L₁ (kg/m)
   link2DensityKgPerM: 0.9,// Densidad lineal del antebrazo L₂ (kg/m)
