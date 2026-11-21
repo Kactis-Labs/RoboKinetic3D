@@ -34,10 +34,10 @@ export const PHYSICAL_LIMITS = {
   defaultMassKg: 2.0,     // Masa de carga del cubo por defecto (kg)
   minMassKg: 0.5,
   maxMassKg: 5.0,
-  gripperMassKg: 0.35,    // Masa propia de la pinza vacía (kg)
-  link1DensityKgPerM: 1.8,// Densidad lineal del brazo L₁ (kg/m)
-  link2DensityKgPerM: 1.2,// Densidad lineal del antebrazo L₂ (kg/m)
-  safeTorqueLimitNm: 100, // Torque máximo nominal de referencia para sobrecarga (N·m)
+  gripperMassKg: 0.30,    // Masa propia de la pinza vacía (kg)
+  link1DensityKgPerM: 1.4,// Densidad lineal del brazo L₁ (kg/m)
+  link2DensityKgPerM: 0.9,// Densidad lineal del antebrazo L₂ (kg/m)
+  safeTorqueLimitNm: 180, // Torque máximo nominal de referencia para sobrecarga (N·m)
 };
 
 /**
@@ -517,10 +517,10 @@ export function calculateShoulderTorque({
 
   let level = 'green';
   let statusLabel = 'Seguro (Nominal)';
-  if (riskRatio >= 0.85) {
+  if (riskRatio >= 0.88) {
     level = 'red';
     statusLabel = 'Sobrecarga (Torque / Alcance Crítico)';
-  } else if (riskRatio >= 0.60) {
+  } else if (riskRatio >= 0.68) {
     level = 'amber';
     statusLabel = 'Precaución (Carga Media-Alta)';
   }

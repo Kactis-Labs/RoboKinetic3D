@@ -228,13 +228,26 @@ for (const wp of [
 console.log('✓ Protecciones físicas de mesa, pedestal y articulaciones validadas.');
 
 console.log('=== 4. Validación de Torque Estático Realista en el Hombro ===');
-// 4.1 Modo directo (sin ángulos): incluye pinza vacía (0.35 kg) + cubo cuando isGripped=true
+// 4.1 Modo directo (sin ángulos): incluye pinza vacía (0.30 kg) + cubo cuando isGripped=true
 const tDirect = calculateShoulderTorque({ rHorizontal: 1.0, payloadMassKg: 0.5, l1: L1, l2: L2, isGripped: true });
-assert.ok(Math.abs(tDirect.torqueNm - (0.35 + 0.5) * 9.81 * 1.0) < 1e-6);
+assert.ok(Math.abs(tDirect.torqueNm - (0.30 + 0.5) * 9.81 * 1.0) < 1e-6);
 assert.equal(tDirect.level, 'green');
 assert.equal(tDirect.isOverloaded, false);
 
-// 4.2 Modo realista 3D: sin sujetar el cubo, el slider del cubo no altera el torque (solo pesan eslabones + pinza)
+// 4.2 Modo realista 3D: en Zona Pick (r=2.12m) con mitad de carga (2.5 kg) debe seguir en zona segura (verde)
+const tPickHalf = calculateShoulderTorque({
+  rHorizontal: 2.1225,
+  payloadMassKg: 2.5,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 30.65,
+  theta3Deg: -95.47,
+  isGripped: true,
+});
+assert.equal(tPickHalf.level, 'green', 'Mitad de carga en Zona Pick no debe generar sobrecarga');
+assert.equal(tPickHalf.isOverloaded, false);
+
+// 4.3 Sin sujetar el cubo, el slider del cubo no altera el torque (solo pesan eslabones + pinza)
 const tUngrippedSmall = calculateShoulderTorque({
   rHorizontal: 1.06,
   payloadMassKg: 0.5,
@@ -259,7 +272,7 @@ assert.ok(Math.abs(tUngrippedSmall.torqueNm - tUngrippedHeavy.torqueNm) < 1e-6, 
 assert.ok(tUngrippedSmall.torqueNm > 0, 'Eslabones y pinza vacía generan torque realista > 0');
 assert.equal(tUngrippedSmall.level, 'green');
 
-// 4.3 Sujetando cubo pesado a largo alcance genera sobrecarga (isOverloaded === true)
+// 4.4 Sujetando cubo pesado a largo alcance genera sobrecarga (isOverloaded === true)
 const tOverload = calculateShoulderTorque({
   rHorizontal: 3.20,
   payloadMassKg: 5.0,
