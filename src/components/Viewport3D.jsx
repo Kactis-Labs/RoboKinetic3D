@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { degToRad } from '../kinematics';
 import { PICK_ZONE, PLACE_ZONE } from '../hooks/usePickAndPlace';
-import { Compass, Cpu, Play, CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Loader2, ShieldAlert, X } from 'lucide-react';
 
 export default function Viewport3D({
   theme,
@@ -23,9 +23,10 @@ export default function Viewport3D({
   statusMessage = '',
   currentStepIndex = 0,
   totalSteps = 10,
+  safetyAlert = null,
+  onDismissSafetyAlert,
 }) {
   const isDark = theme === 'dark';
-  const [showDetails, setShowDetails] = useState(false);
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -1224,10 +1225,26 @@ export default function Viewport3D({
           <span className="font-mono text-[9px] font-semibold">
             {Number(theta1Deg).toFixed(0)}°·{Number(theta2Deg).toFixed(0)}°·{Number(theta3Deg).toFixed(0)}°
           </span>
+          {telemetry.torque && (
+            <>
+              <span className="text-slate-400">|</span>
+              <span
+                className={`font-mono text-[9px] font-bold flex items-center gap-1 ${
+                  telemetry.torque.level === 'red'
+                    ? 'text-[#ef4444]'
+                    : telemetry.torque.level === 'amber'
+                    ? 'text-[#f59e0b]'
+                    : 'text-[#10b981]'
+                }`}
+              >
+                τ:{telemetry.torque.torqueNm.toFixed(1)}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* 2. Versión Escritorio: Mini Panel Resumen (Coordenadas y Ángulos debidamente etiquetados) */}
+      {/* 2. Versión Escritorio: Mini Panel Resumen (Coordenadas, Ángulos y Torque) */}
       <div className="hidden md:flex absolute top-3 left-3 z-10 pointer-events-none select-none">
         <div
           className={`px-3 py-2 rounded-lg border shadow-sm backdrop-blur-md flex flex-col gap-1.5 ${
@@ -1259,7 +1276,7 @@ export default function Viewport3D({
             </div>
           </div>
 
-          {/* Fila 2: Ángulos */}
+          {/* Fila 2: Ángulos y Torque */}
           <div className="flex items-center gap-2 border-t pt-1 border-inherit font-mono text-[10px]">
             <span className="font-sans font-semibold text-slate-400 mr-0.5">Ángulos:</span>
             <span>J1: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta1Deg).toFixed(1)}°</strong></span>
@@ -1267,9 +1284,73 @@ export default function Viewport3D({
             <span>J2: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta2Deg).toFixed(1)}°</strong></span>
             <span className="text-slate-400">•</span>
             <span>J3: <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>{Number(theta3Deg).toFixed(1)}°</strong></span>
+            {telemetry.torque && (
+              <>
+                <span className="text-slate-400">•</span>
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      telemetry.torque.level === 'red'
+                        ? 'bg-[#ef4444]'
+                        : telemetry.torque.level === 'amber'
+                        ? 'bg-[#f59e0b]'
+                        : 'bg-[#10b981]'
+                    }`}
+                  />
+                  <strong
+                    className={
+                      telemetry.torque.level === 'red'
+                        ? 'text-[#ef4444]'
+                        : telemetry.torque.level === 'amber'
+                        ? 'text-[#f59e0b]'
+                        : 'text-[#10b981]'
+                    }
+                  >
+                    τ: {telemetry.torque.torqueNm.toFixed(1)} N·m
+                  </strong>
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Alerta Discreta de Seguridad Física / Fronteras / IK */}
+      {safetyAlert && safetyAlert.message && (
+        <div
+          role="status"
+          className="absolute bottom-12 right-2.5 md:bottom-3 md:right-3 z-20 max-w-[320px] select-none"
+        >
+          <div
+            className={`px-3 py-2 rounded-lg border shadow-lg backdrop-blur-md flex items-start gap-2 text-[11px] ${
+              safetyAlert.type === 'error'
+                ? isDark
+                  ? 'bg-[#7f1d1d]/90 border-[#ef4444] text-[#fecaca]'
+                  : 'bg-[#fef2f2]/95 border-[#ef4444] text-[#991b1b]'
+                : isDark
+                ? 'bg-[#78350f]/90 border-[#f59e0b] text-[#fde68a]'
+                : 'bg-[#fffbeb]/95 border-[#f59e0b] text-[#92400e]'
+            }`}
+          >
+            <ShieldAlert
+              className={`w-4 h-4 shrink-0 mt-0.5 ${
+                safetyAlert.type === 'error' ? 'text-[#ef4444]' : 'text-[#f59e0b]'
+              }`}
+            />
+            <span className="flex-1 font-medium leading-snug">{safetyAlert.message}</span>
+            {onDismissSafetyAlert && (
+              <button
+                type="button"
+                onClick={onDismissSafetyAlert}
+                aria-label="Cerrar alerta"
+                className="opacity-70 hover:opacity-100 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Banner / HUD Flotante Superior: Estado en Vivo de la Rutina Pick & Place */}
       {(routineStatus === 'RUNNING' || routineStatus === 'COMPLETED') && (

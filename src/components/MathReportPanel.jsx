@@ -1,5 +1,6 @@
 import React from 'react';
-import { Calculator, Info, Cpu, CheckCircle2 } from 'lucide-react';
+import { Calculator, Info, Cpu, CheckCircle2, Gauge } from 'lucide-react';
+import { PHYSICAL_LIMITS } from '../kinematics';
 
 export default function MathReportPanel({
   theme,
@@ -8,11 +9,13 @@ export default function MathReportPanel({
   theta3Deg,
   l1,
   l2,
+  payloadMass = PHYSICAL_LIMITS.defaultMassKg,
+  setPayloadMass,
   telemetry,
   mobileTab = 'split',
 }) {
   const isDark = theme === 'dark';
-  const { direct, inverse, servos } = telemetry;
+  const { direct, inverse, servos, torque } = telemetry;
 
   // Paleta de contraste calibrada para ingeniería
   const colors = {
@@ -32,6 +35,31 @@ export default function MathReportPanel({
       : 'bg-[#f1f5f9] border-[#cbd5e1]',
     divider: isDark ? 'border-[#334155]' : 'border-[#cbd5e1]',
   };
+
+  const torqueTheme =
+    torque?.level === 'red'
+      ? {
+          badge: 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]/40',
+          bar: 'bg-[#ef4444]',
+          value: isDark ? 'text-[#f87171]' : 'text-[#dc2626]',
+          dot: 'bg-[#ef4444]',
+        }
+      : torque?.level === 'amber'
+      ? {
+          badge: 'bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/40',
+          bar: 'bg-[#f59e0b]',
+          value: isDark ? 'text-[#fbbf24]' : 'text-[#d97706]',
+          dot: 'bg-[#f59e0b]',
+        }
+      : {
+          badge: 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/40',
+          bar: 'bg-[#10b981]',
+          value: isDark ? 'text-[#34d399]' : 'text-[#059669]',
+          dot: 'bg-[#10b981]',
+        };
+
+  const reachPct = Math.min(100, Math.round((torque?.reachRatio || 0) * 100));
+  const riskPct = Math.min(100, Math.round((torque?.riskRatio || 0) * 100));
 
   return (
     <aside
@@ -100,23 +128,19 @@ export default function MathReportPanel({
                 </span>
                 <span className={`text-[10px] font-sans ${colors.label}`}>Hombro + Codo</span>
               </div>
-              
-              {/* Ecuación Teórica */}
+
               <div className="text-xs font-bold tracking-wide text-[#2563eb] py-0.5">
                 {direct.formulaR}
               </div>
-              
-              {/* Sustitución Numérica */}
+
               <div className={`text-[11px] ${colors.sublabel}`}>
                 {direct.substitutionR}
               </div>
-              
-              {/* Paso Intermedio */}
+
               <div className={`text-[10px] ${colors.label}`}>
                 {direct.intermediateR}
               </div>
 
-              {/* Resultado */}
               <div className={`pt-1.5 border-t flex justify-between items-center text-xs ${colors.divider}`}>
                 <span className={`font-sans text-[11px] font-medium ${colors.label}`}>
                   Radio Horizontal (r):
@@ -136,22 +160,18 @@ export default function MathReportPanel({
                 <span className={`text-[10px] font-sans ${colors.label}`}>Pedestal L₀ + Elevación</span>
               </div>
 
-              {/* Ecuación Teórica */}
               <div className="text-xs font-bold tracking-wide text-[#b45309] dark:text-[#fbbf24] py-0.5">
                 {direct.formulaZ}
               </div>
 
-              {/* Sustitución Numérica */}
               <div className={`text-[11px] ${colors.sublabel}`}>
                 {direct.substitutionZ}
               </div>
 
-              {/* Paso Intermedio */}
               <div className={`text-[10px] ${colors.label}`}>
                 {direct.intermediateZ}
               </div>
 
-              {/* Resultado */}
               <div className={`pt-1.5 border-t flex justify-between items-center text-xs ${colors.divider}`}>
                 <span className={`font-sans text-[11px] font-medium ${colors.label}`}>
                   Cota Vertical (Z):
@@ -186,13 +206,11 @@ export default function MathReportPanel({
           </div>
 
           <div className="p-3 space-y-3 font-math text-xs">
-            {/* Proyecciones Ortogonales con el Giro de la Base */}
             <div className={`p-2.5 rounded border space-y-2.5 ${colors.innerCard}`}>
               <div className="text-[11px] font-sans font-medium text-slate-400">
                 Giro del Servomotor de Base (θ₁) proyectando el radio horizontal r:
               </div>
 
-              {/* Coordenada X */}
               <div className="space-y-0.5">
                 <div className="flex justify-between text-[11px] font-semibold">
                   <span className={colors.xText}>{direct.formulaX}</span>
@@ -203,7 +221,6 @@ export default function MathReportPanel({
                 </div>
               </div>
 
-              {/* Coordenada Y (Profundidad) */}
               <div className="space-y-0.5 pt-1.5 border-t border-dashed border-slate-600/30">
                 <div className="flex justify-between text-[11px] font-semibold">
                   <span className={colors.yText}>{direct.formulaY}</span>
@@ -239,7 +256,6 @@ export default function MathReportPanel({
           </div>
 
           <div className="p-3 space-y-3 font-math text-xs">
-            {/* Teorema de Pitágoras en la Mesa */}
             <div className={`p-2.5 rounded border space-y-1.5 ${colors.innerCard}`}>
               <div className="flex justify-between items-center text-[11px]">
                 <span className={`font-sans font-semibold ${colors.value}`}>
@@ -255,7 +271,6 @@ export default function MathReportPanel({
               </div>
             </div>
 
-            {/* Distancia Espacial 3D desde el Hombro (rho) */}
             <div className={`p-2.5 rounded border space-y-1.5 ${colors.innerCard}`}>
               <div className="flex justify-between items-center text-[11px]">
                 <span className={`font-sans font-semibold ${colors.value}`}>
@@ -271,7 +286,6 @@ export default function MathReportPanel({
               </div>
             </div>
 
-            {/* Cálculo Analítico del Codo θ₃ */}
             <div className={`p-2.5 rounded border space-y-1.5 ${colors.innerCard}`}>
               <div className="flex justify-between items-center text-[11px]">
                 <span className={`font-sans font-semibold ${colors.zText}`}>
@@ -295,7 +309,6 @@ export default function MathReportPanel({
               </div>
             </div>
 
-            {/* Cálculo Analítico del Hombro θ₂ */}
             <div className={`p-2.5 rounded border space-y-1.5 ${colors.innerCard}`}>
               <div className="flex justify-between items-center text-[11px]">
                 <span className={`font-sans font-semibold ${colors.xText}`}>
@@ -322,7 +335,95 @@ export default function MathReportPanel({
         </div>
 
         {/* ======================================================== */}
-        {/* BLOQUE 4: TELEMETRÍA DE LOS SERVOMOTORES FÍSICOS         */}
+        {/* BLOQUE 4: TORQUE ESTÁTICO EN EL HOMBRO (N·m)             */}
+        {/* ======================================================== */}
+        <div
+          className={`rounded border overflow-hidden ${
+            isDark
+              ? 'bg-[#1e293b]/50 border-[#334155]'
+              : 'bg-[#ffffff] border-[#cbd5e1] shadow-sm'
+          }`}
+        >
+          <div
+            className={`px-3 py-1.5 border-b flex items-center justify-between text-[11px] font-semibold ${
+              isDark
+                ? 'bg-[#141c2b] border-[#334155] text-[#e2e8f0]'
+                : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#1e293b]'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <Gauge className="w-3.5 h-3.5 text-[#ea580c]" />
+              <span>4. Torque Estático en el Hombro (J2)</span>
+            </div>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold flex items-center gap-1 ${torqueTheme.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${torqueTheme.dot}`} />
+              <span>{torque?.level === 'red' ? 'Crítico' : torque?.level === 'amber' ? 'Precaución' : 'Seguro'}</span>
+            </span>
+          </div>
+
+          <div className="p-3 space-y-2.5 text-xs">
+            <div className={`p-2.5 rounded border space-y-1.5 font-math ${colors.innerCard}`}>
+              <div className="flex items-center justify-between">
+                <span className={`font-sans font-semibold text-[11px] ${colors.value}`}>
+                  Par Estático (τ = F · r):
+                </span>
+                <span className={`font-bold text-base ${torqueTheme.value}`}>
+                  {torque ? torque.torqueNm.toFixed(2) : '0.00'} N·m
+                </span>
+              </div>
+              <div className="text-[11px] font-semibold text-[#2563eb]">
+                τ = (m · g) · r  [g = 9.81 m/s²]
+              </div>
+              <div className={`text-[10px] ${colors.sublabel}`}>
+                τ = ({Number(payloadMass).toFixed(1)} kg · 9.81) · {torque ? torque.leverArmM.toFixed(3) : '0.000'} m ={' '}
+                {torque ? torque.forceN.toFixed(2) : '0.00'} N · {torque ? torque.leverArmM.toFixed(3) : '0.000'} m
+              </div>
+
+              {/* Barras de alcance y carga */}
+              <div className={`pt-1.5 border-t space-y-1.5 font-sans ${colors.divider}`}>
+                <div className="flex justify-between text-[10px]">
+                  <span className={colors.label}>
+                    Alcance Horizontal ({torque ? torque.leverArmM.toFixed(2) : '0.00'} / {torque ? torque.maxReachM.toFixed(2) : '3.20'} m)
+                  </span>
+                  <span className={`font-mono font-bold ${torqueTheme.value}`}>{reachPct}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-slate-500/20 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-200 ${torqueTheme.bar}`}
+                    style={{ width: `${riskPct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Slider sincronizado de Masa de Carga */}
+            <div className={`p-2 rounded border space-y-1 ${colors.innerCard}`}>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium">Masa de la Carga (kg):</span>
+                <span className={`font-math font-bold ${colors.value}`}>
+                  {Number(payloadMass).toFixed(1)} kg
+                </span>
+              </div>
+              <input
+                type="range"
+                min={PHYSICAL_LIMITS.minMassKg}
+                max={PHYSICAL_LIMITS.maxMassKg}
+                step="0.1"
+                value={payloadMass}
+                onChange={(e) => setPayloadMass && setPayloadMass(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <div className={`flex justify-between text-[9px] font-mono ${colors.label}`}>
+                <span>{PHYSICAL_LIMITS.minMassKg.toFixed(1)} kg</span>
+                <span>Límite ref: {PHYSICAL_LIMITS.safeTorqueLimitNm} N·m</span>
+                <span>{PHYSICAL_LIMITS.maxMassKg.toFixed(1)} kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* BLOQUE 5: TELEMETRÍA DE LOS SERVOMOTORES FÍSICOS         */}
         {/* ======================================================== */}
         <div
           className={`rounded border overflow-hidden ${
@@ -340,7 +441,7 @@ export default function MathReportPanel({
           >
             <div className="flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-[#2563eb]" />
-              <span>Telemetría de los 3 Servomotores</span>
+              <span>5. Telemetría de los 3 Servomotores</span>
             </div>
             <span className="text-[10px] text-[#2563eb] font-semibold">Actuadores Físicos</span>
           </div>
@@ -362,7 +463,9 @@ export default function MathReportPanel({
             <div className={`p-2 rounded border flex items-center justify-between ${colors.innerCard}`}>
               <div>
                 <span className="font-bold text-[11px] block">{servos.j2.name} (J2)</span>
-                <span className={`text-[10px] ${colors.label}`}>{servos.j2.axis} · Par Gravitatorio: {servos.j2.loadFactor}%</span>
+                <span className={`text-[10px] ${colors.label}`}>
+                  {servos.j2.axis} · τ: {servos.j2.torqueNm.toFixed(1)} N·m ({servos.j2.loadFactor}%)
+                </span>
               </div>
               <div className="text-right font-math">
                 <span className="font-bold text-xs text-[#34d399]">{Number(theta2Deg).toFixed(1)}°</span>
@@ -385,7 +488,7 @@ export default function MathReportPanel({
         </div>
 
         {/* ======================================================== */}
-        {/* BLOQUE 5: NOTA TÉCNICA PEDAGÓGICA                        */}
+        {/* BLOQUE 6: NOTA TÉCNICA PEDAGÓGICA                        */}
         {/* ======================================================== */}
         <div
           className={`p-3 rounded border text-[11px] space-y-1.5 ${

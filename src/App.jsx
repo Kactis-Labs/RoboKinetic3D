@@ -1,11 +1,20 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Sliders, Box, Calculator } from 'lucide-react';
 import Header from './components/Header';
 import PropertyManager from './components/PropertyManager';
 import Viewport3D from './components/Viewport3D';
 import MathReportPanel from './components/MathReportPanel';
-import { getKinematicsTelemetry } from './kinematics';
+import {
+  PHYSICAL_LIMITS,
+  clampPoseToWorkspace,
+  getKinematicsTelemetry,
+  inverseKinematics3DOF,
+} from './kinematics';
 import { usePickAndPlace } from './hooks/usePickAndPlace';
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 export default function App() {
   // 1. Selector de Tema (Light / Dark Mode con persistencia en localStorage)
@@ -33,10 +42,40 @@ export default function App() {
   // 3. Efector Final: Pinza / Gripper Industrial (Apertura 0 mm a 40 mm, reposo neutro inicial en 14 mm)
   const [gripperAperture, setGripperAperture] = useState(14.0);
 
-  // 4. Parámetros estructurales de eslabones (Proporción armónica con la base del manipulador)
+  // 4. Parámetros estructurales de eslabones y masa de carga
   const [l1, setL1] = useState(1.75); // Eslabón 1 (Brazo - 1.75m)
   const [l2, setL2] = useState(1.45); // Eslabón 2 (Antebrazo - 1.45m)
+  const [payloadMass, setPayloadMass] = useState(PHYSICAL_LIMITS.defaultMassKg);
   const hBase = 0.60; // Altura del pedestal de la base al eje del hombro (0.60m)
+
+  // 4.5. Alertas discretas de seguridad física y control cartesiano
+  const [safetyAlert, setSafetyAlert] = useState(null);
+  const [isCartesianMoving, setIsCartesianMoving] = useState(false);
+  const cartesianAnimRef = useRef(null);
+
+  useEffect(() => {
+    if (!safetyAlert) return;
+    const timer = setTimeout(() => {
+      setSafetyAlert(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [safetyAlert]);
+
+  useEffect(() => {
+    return () => {
+      if (cartesianAnimRef.current) {
+        cancelAnimationFrame(cartesianAnimRef.current);
+      }
+    };
+  }, []);
+
+  const cancelCartesianMove = useCallback(() => {
+    if (cartesianAnimRef.current) {
+      cancelAnimationFrame(cartesianAnimRef.current);
+      cartesianAnimRef.current = null;
+    }
+    setIsCartesianMoving(false);
+  }, []);
 
   // 5. Orquestador y Máquina de Estados de Pick & Place
   const pickAndPlace = usePickAndPlace({
@@ -56,6 +95,165 @@ export default function App() {
     setCameraViewTrigger({ view: viewName, timestamp: Date.now() });
   };
 
+  // Validación y acotación segura de articulaciones (Joint Clamping + Mesa + Pedestal)
+  const applySafeJointPose = useCallback(
+    ({
+      nextT1 = theta1Deg,
+      nextT2 = theta2Deg,
+      nextT3 = theta3Deg,
+      nextL1 = l1,
+      nextL2 = l2,
+    }) => {
+      const clampedPose = clampPoseToWorkspace(
+        {
+          theta1Deg: nextT1,
+          theta2Deg: nextT2,
+          theta3Deg: nextT3,
+          l1: nextL1,
+          l2: nextL2,
+          hBase,
+        },
+        { theta2Deg, theta3Deg }
+      );
+
+      setTheta1Deg(Number(clampedPose.theta1Deg.toFixed(2)));
+      setTheta2Deg(Number(clampedPose.theta2Deg.toFixed(2)));
+      setTheta3Deg(Number(clampedPose.theta3Deg.toFixed(2)));
+
+      if (clampedPose.clamped && clampedPose.message) {
+        setSafetyAlert({
+          type: 'warning',
+          message: clampedPose.message,
+          timestamp: Date.now(),
+        });
+      }
+    },
+    [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase]
+  );
+
+  const handleSafeTheta1Change = useCallback(
+    (val) => {
+      cancelCartesianMove();
+      applySafeJointPose({ nextT1: val });
+    },
+    [cancelCartesianMove, applySafeJointPose]
+  );
+
+  const handleSafeTheta2Change = useCallback(
+    (val) => {
+      cancelCartesianMove();
+      applySafeJointPose({ nextT2: val });
+    },
+    [cancelCartesianMove, applySafeJointPose]
+  );
+
+  const handleSafeTheta3Change = useCallback(
+    (val) => {
+      cancelCartesianMove();
+      applySafeJointPose({ nextT3: val });
+    },
+    [cancelCartesianMove, applySafeJointPose]
+  );
+
+  const handleSafeL1Change = useCallback(
+    (val) => {
+      cancelCartesianMove();
+      const safeL1 = Math.max(1.2, Math.min(2.4, val));
+      setL1(safeL1);
+      applySafeJointPose({ nextL1: safeL1 });
+    },
+    [cancelCartesianMove, applySafeJointPose]
+  );
+
+  const handleSafeL2Change = useCallback(
+    (val) => {
+      cancelCartesianMove();
+      const safeL2 = Math.max(1.0, Math.min(2.0, val));
+      setL2(safeL2);
+      applySafeJointPose({ nextL2: safeL2 });
+    },
+    [cancelCartesianMove, applySafeJointPose]
+  );
+
+  // Interpolación suave Ease-In-Out hacia coordenada cartesiana (X, Y, Z) validada
+  const handleMoveToCartesian = useCallback(
+    ({ x, y, z }) => {
+      if (pickAndPlace.routineStatus === 'RUNNING') {
+        const msg = 'Detén la rutina Pick & Place antes de mover por coordenadas.';
+        setSafetyAlert({ type: 'warning', message: msg, timestamp: Date.now() });
+        return { ok: false, message: msg };
+      }
+
+      const ik = inverseKinematics3DOF({
+        targetX: x,
+        targetY: y,
+        targetZ: z,
+        l1,
+        l2,
+        hBase,
+        elbowConfig: 'up',
+        currentTheta1Deg: theta1Deg,
+      });
+
+      if (!ik.isValid) {
+        const msg = ik.errorMessage || 'Punto fuera de alcance / Colisión con mesa';
+        setSafetyAlert({
+          type: 'error',
+          message: msg,
+          timestamp: Date.now(),
+        });
+        return { ok: false, message: msg };
+      }
+
+      cancelCartesianMove();
+      setSafetyAlert(null);
+      setIsCartesianMoving(true);
+
+      const startT1 = theta1Deg;
+      const startT2 = theta2Deg;
+      const startT3 = theta3Deg;
+      const targetT1 = ik.theta1Deg;
+      const targetT2 = ik.theta2Deg;
+      const targetT3 = ik.theta3Deg;
+      const durationMs = 900;
+      const startTime = performance.now();
+
+      const animateMove = (now) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+        const ease = easeInOutCubic(progress);
+
+        const rawT1 = startT1 + (targetT1 - startT1) * ease;
+        const rawT2 = startT2 + (targetT2 - startT2) * ease;
+        const rawT3 = startT3 + (targetT3 - startT3) * ease;
+
+        const safeStep = clampPoseToWorkspace(
+          { theta1Deg: rawT1, theta2Deg: rawT2, theta3Deg: rawT3, l1, l2, hBase },
+          { theta2Deg: targetT2, theta3Deg: targetT3 },
+          { useAbsoluteJointLimits: true }
+        );
+
+        setTheta1Deg(Number(safeStep.theta1Deg.toFixed(2)));
+        setTheta2Deg(Number(safeStep.theta2Deg.toFixed(2)));
+        setTheta3Deg(Number(safeStep.theta3Deg.toFixed(2)));
+
+        if (progress < 1) {
+          cartesianAnimRef.current = requestAnimationFrame(animateMove);
+        } else {
+          setTheta1Deg(Number(targetT1.toFixed(2)));
+          setTheta2Deg(Number(targetT2.toFixed(2)));
+          setTheta3Deg(Number(targetT3.toFixed(2)));
+          cartesianAnimRef.current = null;
+          setIsCartesianMoving(false);
+        }
+      };
+
+      cartesianAnimRef.current = requestAnimationFrame(animateMove);
+      return { ok: true };
+    },
+    [pickAndPlace.routineStatus, l1, l2, hBase, theta1Deg, theta2Deg, theta3Deg, cancelCartesianMove]
+  );
+
   // 7. Cálculo matemático cinemático en tiempo real
   const telemetry = useMemo(() => {
     return getKinematicsTelemetry({
@@ -65,11 +263,13 @@ export default function App() {
       l1,
       l2,
       hBase,
+      payloadMassKg: payloadMass,
     });
-  }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase]);
+  }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase, payloadMass]);
 
   // Restablecer parámetros a valores de fábrica (Home industrial)
   const handleReset = () => {
+    cancelCartesianMove();
     pickAndPlace.resetCube();
     setTheta1Deg(0.0);
     setTheta2Deg(100.0);
@@ -77,14 +277,19 @@ export default function App() {
     setGripperAperture(14.0);
     setL1(1.75);
     setL2(1.45);
+    setPayloadMass(PHYSICAL_LIMITS.defaultMassKg);
+    setSafetyAlert(null);
     handleSetCameraView('isometric');
   };
 
   // Ajustar postura predeterminada del robot
   const handlePosePreset = ({ t1, t2, t3, grip }) => {
-    if (t1 !== undefined) setTheta1Deg(t1);
-    if (t2 !== undefined) setTheta2Deg(t2);
-    if (t3 !== undefined) setTheta3Deg(t3);
+    cancelCartesianMove();
+    applySafeJointPose({
+      nextT1: t1 !== undefined ? t1 : theta1Deg,
+      nextT2: t2 !== undefined ? t2 : theta2Deg,
+      nextT3: t3 !== undefined ? t3 : theta3Deg,
+    });
     if (grip !== undefined) setGripperAperture(grip);
   };
 
@@ -102,45 +307,45 @@ export default function App() {
         onSetCameraView={handleSetCameraView}
       />
 
-      {/* Área de trabajo CAD:
-          - En Desktop (md+): Tres columnas completas (PropertyManager, Viewport3D, MathReportPanel)
-          - En Móvil (<md): Modos optimizados priorizando 3D + Sliders:
-              * split: 3D arriba (~38vh) y Sliders abajo con scroll fluido para interactuar y ver en vivo
-              * 3d: Visor 3D a pantalla completa para inspección inmersiva
-              * math: Reporte de cálculos matemáticos completo
-      */}
+      {/* Área de trabajo CAD */}
       <main className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Panel Izquierdo: PropertyManager (Sliders y Actuadores) */}
+        {/* Panel Izquierdo: PropertyManager (Sliders, Actuadores, Cartesiano y Torque) */}
         <PropertyManager
           theme={theme}
           theta1Deg={theta1Deg}
-          setTheta1Deg={setTheta1Deg}
+          setTheta1Deg={handleSafeTheta1Change}
           theta2Deg={theta2Deg}
-          setTheta2Deg={setTheta2Deg}
+          setTheta2Deg={handleSafeTheta2Change}
           theta3Deg={theta3Deg}
-          setTheta3Deg={setTheta3Deg}
+          setTheta3Deg={handleSafeTheta3Change}
           gripperAperture={gripperAperture}
           setGripperAperture={setGripperAperture}
           l1={l1}
-          setL1={setL1}
+          setL1={handleSafeL1Change}
           l2={l2}
-          setL2={setL2}
+          setL2={handleSafeL2Change}
+          payloadMass={payloadMass}
+          setPayloadMass={setPayloadMass}
           telemetry={telemetry}
           onPosePreset={handlePosePreset}
+          onMoveToCartesian={handleMoveToCartesian}
+          isCartesianMoving={isCartesianMoving}
+          safetyAlert={safetyAlert}
           mobileTab={mobileTab}
           routineStatus={pickAndPlace.routineStatus}
           currentStepIndex={pickAndPlace.currentStepIndex}
           totalSteps={pickAndPlace.totalSteps}
           statusMessage={pickAndPlace.statusMessage}
           cubeLocation={pickAndPlace.cubeLocation}
-          onStartRoutine={() =>
+          onStartRoutine={() => {
+            cancelCartesianMove();
             pickAndPlace.startRoutine({
               theta1Deg,
               theta2Deg,
               theta3Deg,
               gripperAperture,
-            })
-          }
+            });
+          }}
           onStopRoutine={pickAndPlace.stopRoutine}
           onResetCube={pickAndPlace.resetCube}
         />
@@ -149,7 +354,6 @@ export default function App() {
         <Viewport3D
           theme={theme}
           theta1Deg={theta1Deg}
-          setTheta2Deg={setTheta2Deg}
           theta2Deg={theta2Deg}
           theta3Deg={theta3Deg}
           l1={l1}
@@ -165,6 +369,8 @@ export default function App() {
           statusMessage={pickAndPlace.statusMessage}
           currentStepIndex={pickAndPlace.currentStepIndex}
           totalSteps={pickAndPlace.totalSteps}
+          safetyAlert={safetyAlert}
+          onDismissSafetyAlert={() => setSafetyAlert(null)}
         />
 
         {/* Panel Derecho: Cálculos Matemáticos */}
@@ -175,6 +381,8 @@ export default function App() {
           theta3Deg={theta3Deg}
           l1={l1}
           l2={l2}
+          payloadMass={payloadMass}
+          setPayloadMass={setPayloadMass}
           telemetry={telemetry}
           mobileTab={mobileTab}
         />
@@ -243,4 +451,3 @@ export default function App() {
     </div>
   );
 }
-
