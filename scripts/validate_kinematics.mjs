@@ -227,21 +227,51 @@ for (const wp of [
 
 console.log('✓ Protecciones físicas de mesa, pedestal y articulaciones validadas.');
 
-console.log('=== 4. Validación de Torque Estático en el Hombro ===');
-const tGreen = calculateShoulderTorque({ rHorizontal: 1.0, payloadMassKg: 0.5, l1: L1, l2: L2 });
-assert.ok(Math.abs(tGreen.torqueNm - 0.5 * 9.81 * 1.0) < 1e-6);
-assert.equal(tGreen.level, 'green');
+console.log('=== 4. Validación de Torque Estático Realista en el Hombro ===');
+// 4.1 Modo directo (sin ángulos): incluye pinza vacía (0.35 kg) + cubo cuando isGripped=true
+const tDirect = calculateShoulderTorque({ rHorizontal: 1.0, payloadMassKg: 0.5, l1: L1, l2: L2, isGripped: true });
+assert.ok(Math.abs(tDirect.torqueNm - (0.35 + 0.5) * 9.81 * 1.0) < 1e-6);
+assert.equal(tDirect.level, 'green');
+assert.equal(tDirect.isOverloaded, false);
 
-const tAmber = calculateShoulderTorque({ rHorizontal: 2.2, payloadMassKg: 2.0, l1: L1, l2: L2 });
-assert.ok(Math.abs(tAmber.torqueNm - 2.0 * 9.81 * 2.2) < 1e-6);
-assert.equal(tAmber.level, 'amber');
+// 4.2 Modo realista 3D: sin sujetar el cubo, el slider del cubo no altera el torque (solo pesan eslabones + pinza)
+const tUngrippedSmall = calculateShoulderTorque({
+  rHorizontal: 1.06,
+  payloadMassKg: 0.5,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 100,
+  theta3Deg: -120,
+  isGripped: false,
+});
+const tUngrippedHeavy = calculateShoulderTorque({
+  rHorizontal: 1.06,
+  payloadMassKg: 5.0,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 100,
+  theta3Deg: -120,
+  isGripped: false,
+});
+assert.equal(tUngrippedSmall.activeCubeMassKg, 0);
+assert.equal(tUngrippedHeavy.activeCubeMassKg, 0);
+assert.ok(Math.abs(tUngrippedSmall.torqueNm - tUngrippedHeavy.torqueNm) < 1e-6, 'Sin sujetar el cubo, cambiar masa del cubo no altera el torque');
+assert.ok(tUngrippedSmall.torqueNm > 0, 'Eslabones y pinza vacía generan torque realista > 0');
+assert.equal(tUngrippedSmall.level, 'green');
 
-const tRedReach = calculateShoulderTorque({ rHorizontal: 3.1, payloadMassKg: 2.0, l1: L1, l2: L2 });
-assert.equal(tRedReach.level, 'red');
+// 4.3 Sujetando cubo pesado a largo alcance genera sobrecarga (isOverloaded === true)
+const tOverload = calculateShoulderTorque({
+  rHorizontal: 3.20,
+  payloadMassKg: 5.0,
+  l1: L1,
+  l2: L2,
+  theta2Deg: 0,
+  theta3Deg: 0,
+  isGripped: true,
+});
+assert.equal(tOverload.activeCubeMassKg, 5.0);
+assert.equal(tOverload.level, 'red');
+assert.equal(tOverload.isOverloaded, true);
 
-const tRedMass = calculateShoulderTorque({ rHorizontal: 2.0, payloadMassKg: 5.0, l1: L1, l2: L2 });
-assert.ok(Math.abs(tRedMass.torqueNm - 5.0 * 9.81 * 2.0) < 1e-6);
-assert.equal(tRedMass.level, 'red');
-
-console.log('✓ Cálculo de torque estático y semáforo verde/ámbar/rojo validados.');
+console.log('✓ Cálculo de torque estático realista y sobrecarga validados.');
 console.log('ALL_KINEMATICS_TESTS_PASSED');

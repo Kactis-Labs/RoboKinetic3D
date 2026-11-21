@@ -31,10 +31,13 @@ export const PHYSICAL_LIMITS = {
   pedestalRadius: 0.88,   // Radio exterior del pedestal central (m)
   pedestalHeight: 0.75,   // Altura de exclusión del cilindro del pedestal/torreta (m)
   gravity: 9.81,          // Aceleración de la gravedad (m/s²)
-  defaultMassKg: 2.0,     // Masa de carga por defecto (kg)
+  defaultMassKg: 2.0,     // Masa de carga del cubo por defecto (kg)
   minMassKg: 0.5,
   maxMassKg: 5.0,
-  safeTorqueLimitNm: 100, // Torque máximo nominal de referencia para semáforo crítico (N·m)
+  gripperMassKg: 0.35,    // Masa propia de la pinza vacía (kg)
+  link1DensityKgPerM: 1.8,// Densidad lineal del brazo L₁ (kg/m)
+  link2DensityKgPerM: 1.2,// Densidad lineal del antebrazo L₂ (kg/m)
+  safeTorqueLimitNm: 100, // Torque máximo nominal de referencia para sobrecarga (N·m)
 };
 
 /**
@@ -440,14 +443,18 @@ export function forwardKinematics3DOF({
 }
 
 /**
- * CÁLCULO DE TORQUE ESTÁTICO EN EL HOMBRO (J2)
- * Calcula τ = F · r = (m · g) · r y determina el semáforo de carga/alcance.
+ * CÁLCULO DE TORQUE ESTÁTICO REALISTA EN EL HOMBRO (J2)
+ * Considera el peso propio de los eslabones (L₁, L₂ en sus centros de masa),
+ * el peso de la pinza vacía y la masa del cubo solo cuando está sujeto (isGripped).
  *
  * @param {object} params
- * @param {number} params.rHorizontal - Brazo de palanca horizontal r (m)
- * @param {number} [params.payloadMassKg=2.0] - Masa de la carga (kg)
+ * @param {number} params.rHorizontal - Brazo de palanca horizontal del TCP r (m)
+ * @param {number} [params.payloadMassKg=2.0] - Masa configurada del cubo (kg)
  * @param {number} [params.l1=1.75] - Longitud brazo L₁ (m)
  * @param {number} [params.l2=1.45] - Longitud antebrazo L₂ (m)
+ * @param {number|null} [params.theta2Deg=null] - Ángulo del hombro (°) para centros de masa reales
+ * @param {number|null} [params.theta3Deg=null] - Ángulo del codo (°) para centros de masa reales
+ * @param {boolean} [params.isGripped=true] - Si la pinza sujeta el cubo actualmente
  * @returns {object}
  */
 export function calculateShoulderTorque({
@@ -455,9 +462,12 @@ export function calculateShoulderTorque({
   payloadMassKg = PHYSICAL_LIMITS.defaultMassKg,
   l1 = 1.75,
   l2 = 1.45,
+  theta2Deg = null,
+  theta3Deg = null,
+  isGripped = true,
 }) {
   const rawMass = Number(payloadMassKg);
-  const massKg = clampVal(
+  const cubeConfiguredMassKg = clampVal(
     Number.isFinite(rawMass) ? rawMass : PHYSICAL_LIMITS.defaultMassKg,
     PHYSICAL_LIMITS.minMassKg,
     PHYSICAL_LIMITS.maxMassKg
@@ -465,8 +475,40 @@ export function calculateShoulderTorque({
 
   const g = PHYSICAL_LIMITS.gravity;
   const leverArmM = Math.abs(Number.isFinite(rHorizontal) ? rHorizontal : 0);
-  const forceN = massKg * g;
-  const torqueNm = forceN * leverArmM;
+  const gripperMassKg = PHYSICAL_LIMITS.gripperMassKg;
+  const activeCubeMassKg = isGripped ? cubeConfiguredMassKg : 0;
+  const tcpMassKg = gripperMassKg + activeCubeMassKg;
+
+  let link1MassKg = 0;
+  let link2MassKg = 0;
+  let torqueLink1Nm = 0;
+  let torqueLink2Nm = 0;
+  let torqueTcpNm = 0;
+  let torqueNm = 0;
+
+  if (theta2Deg !== null && theta3Deg !== null && Number.isFinite(theta2Deg) && Number.isFinite(theta3Deg)) {
+    const t2Rad = degToRad(theta2Deg);
+    const t23Rad = degToRad(theta2Deg + theta3Deg);
+
+    const rCm1 = 0.5 * l1 * Math.cos(t2Rad);
+    const rCm2 = l1 * Math.cos(t2Rad) + 0.5 * l2 * Math.cos(t23Rad);
+    const rTcpSigned = l1 * Math.cos(t2Rad) + l2 * Math.cos(t23Rad);
+
+    link1MassKg = l1 * PHYSICAL_LIMITS.link1DensityKgPerM;
+    link2MassKg = l2 * PHYSICAL_LIMITS.link2DensityKgPerM;
+
+    torqueLink1Nm = link1MassKg * g * rCm1;
+    torqueLink2Nm = link2MassKg * g * rCm2;
+    torqueTcpNm = tcpMassKg * g * rTcpSigned;
+    torqueNm = Math.abs(torqueLink1Nm + torqueLink2Nm + torqueTcpNm);
+  } else {
+    torqueTcpNm = tcpMassKg * g * leverArmM;
+    torqueNm = torqueTcpNm;
+  }
+
+  const totalSuspendedMassKg = link1MassKg + link2MassKg + tcpMassKg;
+  const forceN = tcpMassKg * g;
+  const totalForceN = totalSuspendedMassKg * g;
 
   const maxReachM = Math.max(0.1, l1 + l2);
   const reachRatio = leverArmM / maxReachM;
@@ -477,17 +519,30 @@ export function calculateShoulderTorque({
   let statusLabel = 'Seguro (Nominal)';
   if (riskRatio >= 0.85) {
     level = 'red';
-    statusLabel = 'Crítico (Alcance / Torque Límite)';
+    statusLabel = 'Sobrecarga (Torque / Alcance Crítico)';
   } else if (riskRatio >= 0.60) {
     level = 'amber';
     statusLabel = 'Precaución (Carga Media-Alta)';
   }
 
+  const isOverloaded = level === 'red' || torqueNm >= PHYSICAL_LIMITS.safeTorqueLimitNm;
+
   return {
-    massKg,
+    massKg: cubeConfiguredMassKg,
+    activeCubeMassKg,
+    gripperMassKg,
+    tcpMassKg,
+    link1MassKg,
+    link2MassKg,
+    totalSuspendedMassKg,
+    isGripped: Boolean(isGripped),
     gravity: g,
     forceN,
+    totalForceN,
     leverArmM,
+    torqueLink1Nm,
+    torqueLink2Nm,
+    torqueTcpNm,
     torqueNm,
     maxReachM,
     safeTorqueLimitNm: PHYSICAL_LIMITS.safeTorqueLimitNm,
@@ -495,6 +550,7 @@ export function calculateShoulderTorque({
     torqueRatio,
     riskRatio,
     level,
+    isOverloaded,
     statusLabel,
   };
 }
@@ -517,6 +573,7 @@ export function getKinematicsTelemetry(arg1, arg2) {
       l2: arg1.l2 ?? 1.45,
       hBase: arg1.hBase ?? 0.60,
       payloadMassKg: arg1.payloadMassKg ?? PHYSICAL_LIMITS.defaultMassKg,
+      isGripped: arg1.isGripped ?? false,
     };
   } else {
     // Modo compatibilidad si se le pasa (r, thetaDeg)
@@ -530,6 +587,7 @@ export function getKinematicsTelemetry(arg1, arg2) {
       l2: rParam * 0.45,
       hBase: 0.60,
       payloadMassKg: PHYSICAL_LIMITS.defaultMassKg,
+      isGripped: false,
     };
   }
 
@@ -561,12 +619,15 @@ export function getKinematicsTelemetry(arg1, arg2) {
   // Verificación inversa básica del plano de suelo
   const invGround = cartesianToPolar(x, y);
 
-  // Cálculo físico de torque estático en el hombro (τ = F · r)
+  // Cálculo físico realista de torque estático en el hombro (eslabones + pinza + cubo si está sujeto)
   const torque = calculateShoulderTorque({
     rHorizontal: rTcp,
     payloadMassKg: params.payloadMassKg,
     l1: params.l1,
     l2: params.l2,
+    theta2Deg: fk.angles.t2Deg,
+    theta3Deg: fk.angles.t3Deg,
+    isGripped: params.isGripped,
   });
 
   // Estimación cualitativa de par/torque gravitatorio en articulaciones (Normalizado)

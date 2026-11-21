@@ -374,10 +374,20 @@ export default function PropertyManager({
         <div className={`rounded-md border overflow-hidden ${colors.cardBg}`}>
           <div className={`px-2.5 py-1.5 border-b flex items-center justify-between text-[11px] font-semibold ${colors.headerBg}`}>
             <div className="flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-[#ea580c]" />
+              {torque?.isOverloaded ? (
+                <AlertTriangle className="w-3.5 h-3.5 fill-[#ef4444] text-white shrink-0" />
+              ) : (
+                <Gauge className="w-3.5 h-3.5 text-[#ea580c]" />
+              )}
               <span>Torque Hombro (J2)</span>
             </div>
-            <span className={`font-mono text-[10px] px-1.5 py-0.2 rounded border font-bold ${torqueTheme.badge}`}>
+            <span
+              className={`font-mono text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                torque?.isOverloaded
+                  ? 'border-0 bg-[#ef4444] text-white'
+                  : `border ${torqueTheme.badge}`
+              }`}
+            >
               {torque ? `${torque.torqueNm.toFixed(1)} N·m` : '0.0 N·m'}
             </span>
           </div>
@@ -385,7 +395,9 @@ export default function PropertyManager({
           <div className="p-2 space-y-2">
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px]">
-                <span className={colors.label}>{torque?.statusLabel || 'Seguro (Nominal)'}</span>
+                <span className={torque?.isOverloaded ? 'font-bold text-[#ef4444]' : colors.label}>
+                  {torque?.statusLabel || 'Seguro (Nominal)'}
+                </span>
                 <span className={`font-mono font-bold ${torqueTheme.text}`}>{torquePercent}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-slate-500/20 overflow-hidden">
@@ -395,7 +407,8 @@ export default function PropertyManager({
                 />
               </div>
               <div className={`flex justify-between text-[9px] font-mono ${colors.label}`}>
-                <span>F = {torque ? torque.forceN.toFixed(1) : '19.6'} N</span>
+                <span>TCP: {torque ? torque.tcpMassKg.toFixed(2) : '0.35'} kg</span>
+                <span>Brazos: {torque ? (torque.link1MassKg + torque.link2MassKg).toFixed(1) : '4.9'} kg</span>
                 <span>r = {torque ? torque.leverArmM.toFixed(2) : '0.00'} m</span>
               </div>
             </div>
@@ -404,10 +417,23 @@ export default function PropertyManager({
 
             <div className="space-y-0.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium">Masa Carga:</span>
-                <span className={`font-math text-[11px] font-bold ${colors.value}`}>
-                  {Number(payloadMass).toFixed(1)} kg
-                </span>
+                <span className="text-[11px] font-medium">Masa Cubo:</span>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`text-[9px] font-mono px-1 rounded ${
+                      cubeLocation === 'gripped'
+                        ? 'bg-[#d97706]/20 text-[#fbbf24] font-semibold'
+                        : isDark
+                        ? 'bg-[#0f172a] text-[#94a3b8]'
+                        : 'bg-[#e2e8f0] text-[#64748b]'
+                    }`}
+                  >
+                    {cubeLocation === 'gripped' ? 'Sujeto' : 'En reposo'}
+                  </span>
+                  <span className={`font-math text-[11px] font-bold ${colors.value}`}>
+                    {Number(payloadMass).toFixed(1)} kg
+                  </span>
+                </div>
               </div>
               <input
                 type="range"

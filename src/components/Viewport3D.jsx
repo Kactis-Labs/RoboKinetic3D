@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { degToRad } from '../kinematics';
 import { PICK_ZONE, PLACE_ZONE } from '../hooks/usePickAndPlace';
-import { CheckCircle2, Loader2, ShieldAlert, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert, X } from 'lucide-react';
 
 export default function Viewport3D({
   theme,
@@ -53,8 +53,9 @@ export default function Viewport3D({
   const jawRightRef = useRef(null);
   const cubeMeshRef = useRef(null);
 
-  // Materiales para actualización de tema
+  // Materiales para actualización de tema e indicador 3D de sobrecarga
   const materialsRef = useRef({});
+  const overloadRingRef = useRef(null);
 
   // Elementos de cota técnica y proyecciones
   const lineXRef = useRef(null);
@@ -265,6 +266,7 @@ export default function Viewport3D({
     // Base y carcasas de fundición en grafito oscuro / antracita industrial
     const matBase = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.40, metalness: 0.70 });
     const matServoBody = new THREE.MeshStandardMaterial({ color: 0x181b22, roughness: 0.30, metalness: 0.85 });
+    const matServoJ2Body = matServoBody.clone();
     const matServoCap = new THREE.MeshStandardMaterial({ color: 0x3f4654, roughness: 0.25, metalness: 0.85 });
     const matServoHorn = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.30, metalness: 0.80 }); // Acero maquinado / titanio
     // Efector Final: Pinza / Gripper en Grafito Oscuro integral
@@ -275,6 +277,7 @@ export default function Viewport3D({
     materialsRef.current = {
       matBase,
       matServoBody,
+      matServoJ2Body,
       matServoCap,
       matServoHorn,
       matArm1,
@@ -291,14 +294,15 @@ export default function Viewport3D({
      * @param {number} length - Longitud del cuerpo del servo
      * @param {number} radius - Radio del cilindro/eje del servo
      * @param {boolean} isVertical - Orientación vertical u horizontal
+     * @param {THREE.Material} [customBodyMat] - Material dedicado opcional
      */
-    const createServoModel = (labelName, length = 0.36, radius = 0.16, isVertical = false) => {
+    const createServoModel = (labelName, length = 0.36, radius = 0.16, isVertical = false, customBodyMat = null) => {
       const servoGroup = new THREE.Group();
 
       // Carcasa principal cilíndrica/prismática
       const bodyGeo = new THREE.CylinderGeometry(radius, radius, length, 28);
       if (!isVertical) bodyGeo.rotateZ(Math.PI / 2);
-      const body = new THREE.Mesh(bodyGeo, matServoBody);
+      const body = new THREE.Mesh(bodyGeo, customBodyMat || matServoBody);
       body.castShadow = true;
       body.receiveShadow = true;
       servoGroup.add(body);
@@ -393,9 +397,25 @@ export default function Viewport3D({
     turntableGroup.add(bracketRight);
 
     // Servomotor J2 (Hombro - Montado horizontalmente entre las orejetas)
-    const servoJ2 = createServoModel('J2_SHOULDER', 0.44, 0.18, false);
+    const servoJ2 = createServoModel('J2_SHOULDER', 0.44, 0.18, false, matServoJ2Body);
     servoJ2.position.set(0, 0.22, 0); // Eje a altura hBase = 0.60m desde el suelo (0.38 + 0.22 = 0.60m)
     turntableGroup.add(servoJ2);
+
+    // Anillo indicador 3D de sobrecarga térmica/mecánica en el servo J2
+    const overloadRingGeo = new THREE.TorusGeometry(0.195, 0.018, 12, 32);
+    overloadRingGeo.rotateY(Math.PI / 2);
+    const overloadRingMat = new THREE.MeshStandardMaterial({
+      color: 0xef4444,
+      emissive: 0xef4444,
+      emissiveIntensity: 1.1,
+      roughness: 0.2,
+      metalness: 0.3,
+    });
+    const overloadRing = new THREE.Mesh(overloadRingGeo, overloadRingMat);
+    overloadRing.position.set(0, 0, 0);
+    overloadRing.visible = false;
+    servoJ2.add(overloadRing);
+    overloadRingRef.current = overloadRing;
 
     // C) PIVOTE DEL HOMBRO (J2 Pitch: rota en Z local según theta2)
     // El eje del hombro se ubica exactamente a altura hBase (0.60m desde el suelo)
@@ -1088,12 +1108,22 @@ export default function Viewport3D({
     if (groundTargetRef.current) {
       groundTargetRef.current.position.set(x, 0.005, yDepth);
     }
-
-    // G) Diana en el suelo en la proyección (X, Y)
-    if (groundTargetRef.current) {
-      groundTargetRef.current.position.set(x, 0.005, yDepth);
-    }
   }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase, telemetry]);
+
+  // =========================================================================
+  // 6.2. INDICADOR 3D DE SOBRECARGA EN SERVO HOMBRO (J2)
+  // =========================================================================
+  useEffect(() => {
+    const isOverloaded = Boolean(telemetry.torque?.isOverloaded);
+    const matJ2 = materialsRef.current.matServoJ2Body;
+    if (matJ2) {
+      matJ2.emissive.setHex(isOverloaded ? 0xef4444 : 0x000000);
+      matJ2.emissiveIntensity = isOverloaded ? 0.75 : 0;
+    }
+    if (overloadRingRef.current) {
+      overloadRingRef.current.visible = isOverloaded;
+    }
+  }, [telemetry.torque?.isOverloaded]);
 
   // =========================================================================
   // 6.5. APERTURA PARAMÉTRICA DE LA PINZA (GRIPPER ARTICULADO)
@@ -1288,15 +1318,15 @@ export default function Viewport3D({
               <>
                 <span className="text-slate-400">•</span>
                 <span className="inline-flex items-center gap-1">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      telemetry.torque.level === 'red'
-                        ? 'bg-[#ef4444]'
-                        : telemetry.torque.level === 'amber'
-                        ? 'bg-[#f59e0b]'
-                        : 'bg-[#10b981]'
-                    }`}
-                  />
+                  {telemetry.torque.isOverloaded ? (
+                    <AlertTriangle className="w-3.5 h-3.5 fill-[#ef4444] text-white shrink-0" />
+                  ) : (
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        telemetry.torque.level === 'amber' ? 'bg-[#f59e0b]' : 'bg-[#10b981]'
+                      }`}
+                    />
+                  )}
                   <strong
                     className={
                       telemetry.torque.level === 'red'
@@ -1315,28 +1345,36 @@ export default function Viewport3D({
         </div>
       </div>
 
-      {/* Alerta Discreta de Seguridad Física / Fronteras / IK */}
+      {/* Alerta Discreta de Seguridad Física / Fronteras / Sobrecarga */}
       {safetyAlert && safetyAlert.message && (
         <div
           role="status"
-          className="absolute bottom-12 right-2.5 md:bottom-3 md:right-3 z-20 max-w-[320px] select-none"
+          className="absolute bottom-12 right-2.5 md:bottom-3 md:right-3 z-20 max-w-[330px] select-none"
         >
           <div
-            className={`px-3 py-2 rounded-lg border shadow-lg backdrop-blur-md flex items-start gap-2 text-[11px] ${
-              safetyAlert.type === 'error'
+            className={`px-3 py-2 rounded-lg shadow-lg backdrop-blur-md flex items-start gap-2 text-[11px] ${
+              safetyAlert.type === 'overload'
                 ? isDark
-                  ? 'bg-[#7f1d1d]/90 border-[#ef4444] text-[#fecaca]'
-                  : 'bg-[#fef2f2]/95 border-[#ef4444] text-[#991b1b]'
+                  ? 'border-0 bg-[#450a0a]/95 text-[#fecaca]'
+                  : 'border-0 bg-[#fee2e2]/95 text-[#991b1b]'
+                : safetyAlert.type === 'error'
+                ? isDark
+                  ? 'border bg-[#7f1d1d]/90 border-[#ef4444] text-[#fecaca]'
+                  : 'border bg-[#fef2f2]/95 border-[#ef4444] text-[#991b1b]'
                 : isDark
-                ? 'bg-[#78350f]/90 border-[#f59e0b] text-[#fde68a]'
-                : 'bg-[#fffbeb]/95 border-[#f59e0b] text-[#92400e]'
+                ? 'border bg-[#78350f]/90 border-[#f59e0b] text-[#fde68a]'
+                : 'border bg-[#fffbeb]/95 border-[#f59e0b] text-[#92400e]'
             }`}
           >
-            <ShieldAlert
-              className={`w-4 h-4 shrink-0 mt-0.5 ${
-                safetyAlert.type === 'error' ? 'text-[#ef4444]' : 'text-[#f59e0b]'
-              }`}
-            />
+            {safetyAlert.type === 'overload' ? (
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 fill-[#ef4444] text-white" />
+            ) : (
+              <ShieldAlert
+                className={`w-4 h-4 shrink-0 mt-0.5 ${
+                  safetyAlert.type === 'error' ? 'text-[#ef4444]' : 'text-[#f59e0b]'
+                }`}
+              />
+            )}
             <span className="flex-1 font-medium leading-snug">{safetyAlert.message}</span>
             {onDismissSafetyAlert && (
               <button

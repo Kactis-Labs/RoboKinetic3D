@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calculator, Info, Cpu, CheckCircle2, Gauge } from 'lucide-react';
+import { AlertTriangle, Calculator, Info, Cpu, CheckCircle2, Gauge } from 'lucide-react';
 import { PHYSICAL_LIMITS } from '../kinematics';
 
 export default function MathReportPanel({
@@ -352,12 +352,22 @@ export default function MathReportPanel({
             }`}
           >
             <div className="flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>4. Torque Estático en el Hombro (J2)</span>
+              {torque?.isOverloaded ? (
+                <AlertTriangle className="w-3.5 h-3.5 fill-[#ef4444] text-white shrink-0" />
+              ) : (
+                <Gauge className="w-3.5 h-3.5 text-[#ea580c]" />
+              )}
+              <span>4. Torque Estático Realista en Hombro (J2)</span>
             </div>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold flex items-center gap-1 ${torqueTheme.badge}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${torqueTheme.dot}`} />
-              <span>{torque?.level === 'red' ? 'Crítico' : torque?.level === 'amber' ? 'Precaución' : 'Seguro'}</span>
+            <span
+              className={`text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 ${
+                torque?.isOverloaded
+                  ? 'border-0 bg-[#ef4444] text-white'
+                  : `border ${torqueTheme.badge}`
+              }`}
+            >
+              {!torque?.isOverloaded && <span className={`w-1.5 h-1.5 rounded-full ${torqueTheme.dot}`} />}
+              <span>{torque?.level === 'red' ? 'Sobrecarga' : torque?.level === 'amber' ? 'Precaución' : 'Seguro'}</span>
             </span>
           </div>
 
@@ -365,25 +375,27 @@ export default function MathReportPanel({
             <div className={`p-2.5 rounded border space-y-1.5 font-math ${colors.innerCard}`}>
               <div className="flex items-center justify-between">
                 <span className={`font-sans font-semibold text-[11px] ${colors.value}`}>
-                  Par Estático (τ = F · r):
+                  Par Total (|τ_L₁ + τ_L₂ + τ_TCP|):
                 </span>
                 <span className={`font-bold text-base ${torqueTheme.value}`}>
                   {torque ? torque.torqueNm.toFixed(2) : '0.00'} N·m
                 </span>
               </div>
-              <div className="text-[11px] font-semibold text-[#2563eb]">
-                τ = (m · g) · r  [g = 9.81 m/s²]
+              <div className="text-[10px] font-semibold text-[#2563eb]">
+                τ = |m₁·g·r_cm1 + m₂·g·r_cm2 + (m_pinza + m_cubo)·g·r|
               </div>
               <div className={`text-[10px] ${colors.sublabel}`}>
-                τ = ({Number(payloadMass).toFixed(1)} kg · 9.81) · {torque ? torque.leverArmM.toFixed(3) : '0.000'} m ={' '}
-                {torque ? torque.forceN.toFixed(2) : '0.00'} N · {torque ? torque.leverArmM.toFixed(3) : '0.000'} m
+                Eslabones: τ₁={torque ? torque.torqueLink1Nm.toFixed(1) : '0.0'} · τ₂={torque ? torque.torqueLink2Nm.toFixed(1) : '0.0'} N·m
+              </div>
+              <div className={`text-[10px] ${colors.sublabel}`}>
+                Efector ({torque ? torque.gripperMassKg.toFixed(2) : '0.35'} + {torque?.isGripped ? torque.activeCubeMassKg.toFixed(1) : '0.0'} kg): τ_tcp={torque ? torque.torqueTcpNm.toFixed(1) : '0.0'} N·m
               </div>
 
               {/* Barras de alcance y carga */}
               <div className={`pt-1.5 border-t space-y-1.5 font-sans ${colors.divider}`}>
                 <div className="flex justify-between text-[10px]">
                   <span className={colors.label}>
-                    Alcance Horizontal ({torque ? torque.leverArmM.toFixed(2) : '0.00'} / {torque ? torque.maxReachM.toFixed(2) : '3.20'} m)
+                    Alcance ({torque ? torque.leverArmM.toFixed(2) : '0.00'} / {torque ? torque.maxReachM.toFixed(2) : '3.20'} m)
                   </span>
                   <span className={`font-mono font-bold ${torqueTheme.value}`}>{reachPct}%</span>
                 </div>
@@ -396,10 +408,12 @@ export default function MathReportPanel({
               </div>
             </div>
 
-            {/* Slider sincronizado de Masa de Carga */}
+            {/* Slider sincronizado de Masa del Cubo */}
             <div className={`p-2 rounded border space-y-1 ${colors.innerCard}`}>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-medium">Masa de la Carga (kg):</span>
+                <span className="font-medium">
+                  Masa del Cubo ({torque?.isGripped ? 'Sujeto en pinza' : 'En reposo · 0.0 kg en pinza'}):
+                </span>
                 <span className={`font-math font-bold ${colors.value}`}>
                   {Number(payloadMass).toFixed(1)} kg
                 </span>

@@ -6,6 +6,7 @@ import Viewport3D from './components/Viewport3D';
 import MathReportPanel from './components/MathReportPanel';
 import {
   PHYSICAL_LIMITS,
+  calculateShoulderTorque,
   clampPoseToWorkspace,
   getKinematicsTelemetry,
   inverseKinematics3DOF,
@@ -54,7 +55,7 @@ export default function App() {
   const cartesianAnimRef = useRef(null);
 
   useEffect(() => {
-    if (!safetyAlert) return;
+    if (!safetyAlert || safetyAlert.type === 'overload') return;
     const timer = setTimeout(() => {
       setSafetyAlert(null);
     }, 4000);
@@ -206,7 +207,26 @@ export default function App() {
       }
 
       cancelCartesianMove();
-      setSafetyAlert(null);
+
+      const destTorque = calculateShoulderTorque({
+        rHorizontal: ik.r,
+        payloadMassKg: payloadMass,
+        l1,
+        l2,
+        theta2Deg: ik.theta2Deg,
+        theta3Deg: ik.theta3Deg,
+        isGripped: pickAndPlace.cubeLocation === 'gripped',
+      });
+      if (destTorque.isOverloaded) {
+        setSafetyAlert({
+          type: 'overload',
+          message: `Sobrecarga proyectada en Servo Hombro (J2): ${destTorque.torqueNm.toFixed(1)} N·m`,
+          timestamp: Date.now(),
+        });
+      } else {
+        setSafetyAlert(null);
+      }
+
       setIsCartesianMoving(true);
 
       const startT1 = theta1Deg;
@@ -254,7 +274,8 @@ export default function App() {
     [pickAndPlace.routineStatus, l1, l2, hBase, theta1Deg, theta2Deg, theta3Deg, cancelCartesianMove]
   );
 
-  // 7. Cálculo matemático cinemático en tiempo real
+  // 7. Cálculo matemático cinemático y torque realista en tiempo real
+  const isCubeGripped = pickAndPlace.cubeLocation === 'gripped';
   const telemetry = useMemo(() => {
     return getKinematicsTelemetry({
       theta1Deg,
@@ -264,8 +285,25 @@ export default function App() {
       l2,
       hBase,
       payloadMassKg: payloadMass,
+      isGripped: isCubeGripped,
     });
-  }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase, payloadMass]);
+  }, [theta1Deg, theta2Deg, theta3Deg, l1, l2, hBase, payloadMass, isCubeGripped]);
+
+  // Alerta automática por transición hacia sobrecarga del servomotor J2
+  const prevOverloadRef = useRef(false);
+  useEffect(() => {
+    const overloaded = Boolean(telemetry.torque?.isOverloaded);
+    if (overloaded && !prevOverloadRef.current) {
+      setSafetyAlert({
+        type: 'overload',
+        message: `Sobrecarga en Servo Hombro (J2): ${telemetry.torque.torqueNm.toFixed(1)} N·m — reduce alcance o carga`,
+        timestamp: Date.now(),
+      });
+    } else if (!overloaded && prevOverloadRef.current) {
+      setSafetyAlert((prev) => (prev?.type === 'overload' ? null : prev));
+    }
+    prevOverloadRef.current = overloaded;
+  }, [telemetry.torque?.isOverloaded, telemetry.torque?.torqueNm]);
 
   // Restablecer parámetros a valores de fábrica (Home industrial)
   const handleReset = () => {
